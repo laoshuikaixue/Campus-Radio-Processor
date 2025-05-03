@@ -19,6 +19,9 @@ const mergeProgressInterval = ref(null); // 进度条模拟更新的定时器
 // 添加处理状态文本提示
 const processingStatusText = ref('');
 const canCancelProcessing = ref(true); // 是否可以取消处理
+// 音量标准化选项
+const normalizeVolume = ref(false); // 是否启用音量标准化
+const normalizeTargetDb = ref(-3.0); // 标准化目标dB
 // 新增取消处理API调用ID
 const processingRequestId = ref(null);
 
@@ -194,7 +197,9 @@ const mergeSelectedFiles = async () => {
     const response = await axios.post('http://localhost:8000/api/merge', {
       audioIds: audioFiles.value.map(file => file.id), // 始终处理所有文件
       outputName: mergeOutputName.value.trim(),
-      requestId: processingRequestId.value // 传递请求ID，用于后端识别取消请求
+      requestId: processingRequestId.value, // 传递请求ID，用于后端识别取消请求
+      normalizeVolume: normalizeVolume.value, // 是否启用音量标准化
+      normalizeTargetDb: normalizeTargetDb.value // 标准化目标dB值
     });
 
     // 检查任务是否被取消 - 如果response.data中有status字段且为cancelled
@@ -563,13 +568,40 @@ const addDialogToBody = () => {
     <h3>处理音频文件</h3>
     
     <div class="merge-form">
-      <label for="merge-name">处理后的文件名:</label>
-      <input
-        type="text"
-        id="merge-name"
-        value="${mergeOutputName.value}"
-        ${processingMerge.value ? 'disabled' : ''}
-      />
+      <div class="form-group">
+        <label for="merge-name">处理后的文件名:</label>
+        <input
+          type="text"
+          id="merge-name"
+          value="${mergeOutputName.value}"
+          ${processingMerge.value ? 'disabled' : ''}
+        />
+      </div>
+      
+      <div class="form-group normalize-options">
+        <div class="checkbox-container">
+          <input
+            type="checkbox"
+            id="normalize-volume"
+            ${normalizeVolume.value ? 'checked' : ''}
+            ${processingMerge.value ? 'disabled' : ''}
+          />
+          <label for="normalize-volume">音量标准化</label>
+        </div>
+        
+        <div class="db-control" id="db-control" style="${normalizeVolume.value ? '' : 'opacity: 0.5; pointer-events: none;'}">
+          <label for="normalize-target-db">目标音量 (dB):</label>
+          <input
+            type="number"
+            id="normalize-target-db"
+            value="${normalizeTargetDb.value}"
+            step="0.5"
+            min="-20"
+            max="0"
+            ${!normalizeVolume.value || processingMerge.value ? 'disabled' : ''}
+          />
+        </div>
+      </div>
     </div>
     
     <div class="selected-files-info">
@@ -613,6 +645,35 @@ const addDialogToBody = () => {
   // 添加事件监听
   document.getElementById('merge-name')?.addEventListener('input', (e) => {
     mergeOutputName.value = e.target.value;
+  });
+  
+  // 音量标准化复选框事件
+  document.getElementById('normalize-volume')?.addEventListener('change', (e) => {
+    normalizeVolume.value = e.target.checked;
+    
+    // 更新目标dB输入框状态
+    const dbControl = document.getElementById('db-control');
+    const dbInput = document.getElementById('normalize-target-db');
+    
+    if (dbControl) {
+      dbControl.style.opacity = normalizeVolume.value ? '1' : '0.5';
+      dbControl.style.pointerEvents = normalizeVolume.value ? 'auto' : 'none';
+    }
+    
+    if (dbInput) {
+      dbInput.disabled = !normalizeVolume.value || processingMerge.value;
+    }
+  });
+  
+  // 目标dB值输入事件
+  document.getElementById('normalize-target-db')?.addEventListener('input', (e) => {
+    // 将输入值限制在[-20, 0]范围内
+    let value = parseFloat(e.target.value);
+    if (isNaN(value)) value = -3.0;
+    value = Math.max(-20, Math.min(0, value));
+    
+    normalizeTargetDb.value = value;
+    e.target.value = value; // 确保显示值反映实际使用值
   });
   
   document.getElementById('confirm-merge-btn')?.addEventListener('click', () => {

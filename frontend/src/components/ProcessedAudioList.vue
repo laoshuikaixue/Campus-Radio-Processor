@@ -181,6 +181,11 @@ defineExpose({
                 <div class="audio-meta">
                   <span class="duration">
                     <i class="time-icon"></i>时长: {{ formatDuration(file.duration) }}
+                    <template v-if="file.normalizeVolume">
+                      <span class="normalize-badge" :title="`已标准化到 ${file.normalizeTargetDb} dB`">
+                        <i class="volume-icon"></i>音量已标准化 ({{ file.normalizeTargetDb }} dB)
+                      </span>
+                    </template>
                   </span>
                   <span class="processed-badge">
                     <i class="check-icon"></i>已处理
@@ -435,6 +440,23 @@ h2 {
   font-weight: 500;
 }
 
+.normalize-badge {
+  display: inline-flex;
+  align-items: center;
+  color: #2196f3;
+  font-weight: 500;
+  font-size: 0.8rem;
+  margin-left: 5px;
+  padding: 2px 6px;
+  background-color: rgba(33, 150, 243, 0.1);
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.normalize-badge:hover {
+  background-color: rgba(33, 150, 243, 0.2);
+}
+
 .audio-actions {
   display: flex;
   justify-content: flex-end;
@@ -523,6 +545,11 @@ h2 {
 
 .download-icon::before {
   content: "💾";
+  margin-right: 5px;
+}
+
+.volume-icon::before {
+  content: "🔊";
   margin-right: 5px;
 }
 </style>

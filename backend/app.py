@@ -44,6 +44,8 @@ class MergeRequest(BaseModel):
     audioIds: List[str]
     outputName: str
     requestId: Optional[str] = None
+    normalizeVolume: bool = False
+    normalizeTargetDb: float = -3.0
 
 
 class ReorderRequest(BaseModel):
@@ -418,6 +420,22 @@ def merge_audio(request: MergeRequest):
                 processing_tasks[request_id]['status'] = 'cancelled'
             return {"success": False, "message": "处理任务已被取消", "status": "cancelled"}
 
+        # 如果启用音量标准化
+        if getattr(request, 'normalizeVolume', False):
+            try:
+                target_dBFS = getattr(request, 'normalizeTargetDb', -3.0)
+                print(f"正在进行音量标准化到 {target_dBFS} dBFS")
+                
+                # 计算当前dBFS与目标dBFS的差值
+                change_in_dBFS = target_dBFS - merged_audio.dBFS
+                
+                # 应用增益变化
+                merged_audio = merged_audio.apply_gain(change_in_dBFS)
+                print(f"音量标准化完成，增益调整: {change_in_dBFS:.2f} dB")
+            except Exception as e:
+                print(f"音量标准化失败: {str(e)}")
+                # 继续使用未标准化的音频，不中断处理流程
+        
         # 导出合并后的音频文件
         print(f"导出合并文件到: {output_path}")
         merged_audio.export(output_path, format="mp3")
@@ -431,7 +449,9 @@ def merge_audio(request: MergeRequest):
             'path': output_path,
             'duration': len(merged_audio) / 1000,  # 以秒为单位的时长
             'merged': True,
-            'mergedFrom': [f['id'] for f in files_to_merge]
+            'mergedFrom': [f['id'] for f in files_to_merge],
+            'normalizeVolume': getattr(request, 'normalizeVolume', False),  # 是否已应用音量标准化
+            'normalizeTargetDb': getattr(request, 'normalizeTargetDb', -3.0) if getattr(request, 'normalizeVolume', False) else None  # 标准化目标dB值
         }
 
         # 将合并后的音频文件元数据添加到总元数据列表中
@@ -489,9 +509,15 @@ def download_audio(audio_id: str):
         if item['id'] == audio_id:
             if not os.path.exists(item['path']):
                 raise HTTPException(status_code=404, detail="文件未找到")
+            
+            # 确保下载文件名带有.mp3后缀
+            display_name = item['displayName']
+            if item.get('merged', False) and not display_name.lower().endswith('.mp3'):
+                display_name = f"{display_name}.mp3"
+                
             return FileResponse(
                 path=item['path'],
-                filename=item['displayName'],
+                filename=display_name,
                 media_type='application/octet-stream'
             )
     raise HTTPException(status_code=404, detail="未找到音频文件")
