@@ -60,7 +60,11 @@ const handleProcessSuccess = (processedItem) => {
     </main>
 
     <footer class="app-footer">
-      <p>校园广播站音频处理系统 | Powered By LaoShui @ {{ new Date().getFullYear() }}</p>
+      <p>校园广播站音频处理系统 | Powered By LaoShui @ {{ new Date().getFullYear() }} | 
+        <a href="https://github.com/laoshuikaixue/Campus-Radio-Processor" target="_blank" class="github-link">
+          https://github.com/laoshuikaixue/Campus-Radio-Processor
+        </a>
+      </p>
     </footer>
   </div>
 </template>
@@ -188,6 +192,28 @@ p {
 
 .app-footer p {
     margin: 0; /* 移除默认的段落外边距 */
+}
+
+.github-link {
+    display: inline-flex;
+    align-items: center;
+    color: #24292e;
+    text-decoration: none;
+    padding: 5px 10px;
+    background-color: #f6f8fa;
+    border-radius: 6px;
+    border: 1px solid #e1e4e8;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    margin-left: 5px;
+}
+
+.github-link:hover {
+    background-color: #0366d6;
+    color: white;
+    border-color: #0366d6;
+    transform: translateY(-2px);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
 }
 
 /* 动画效果 */
