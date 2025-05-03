@@ -32,8 +32,6 @@ const isLoaded = ref(false);
 
 // 创建Howl实例
 const initSound = () => {
-  console.log('初始化音频播放器:', props.src);
-  
   // 先销毁现有实例（如果有）
   if (sound.value) {
     sound.value.unload();
@@ -52,13 +50,11 @@ const initSound = () => {
       preload: true,
       format: ['mp3', 'wav', 'ogg'],
       onplay: () => {
-        console.log('音频开始播放');
         isPlaying.value = true;
         // 开始更新进度
         updateProgress();
       },
       onpause: () => {
-        console.log('音频暂停');
         isPlaying.value = false;
       },
       onstop: () => {
@@ -73,47 +69,37 @@ const initSound = () => {
       },
       onload: () => {
         // 获取音频文件总时长
-        console.log('音频加载完成，时长:', sound.value.duration());
         duration.value = sound.value.duration();
         isLoaded.value = true;
         error.value = null;
       },
       onloaderror: (id, err) => {
-        console.error('加载音频失败:', err);
         error.value = '无法加载音频文件';
         isLoaded.value = false;
       }
     });
   } catch (e) {
-    console.error('创建Howl实例失败:', e);
     error.value = '初始化播放器失败';
   }
 };
 
 // 切换播放/暂停
 const togglePlay = () => {
-  console.log('点击播放/暂停按钮');
-  
   if (!sound.value) {
-    console.log('播放器未初始化，重新初始化');
     initSound();
   }
   
   if (!isLoaded.value) {
-    console.log('音频尚未加载完成');
     return;
   }
   
   try {
     if (sound.value.playing()) {
-      console.log('当前正在播放，执行暂停');
       sound.value.pause();
     } else {
-      console.log('当前已暂停，执行播放');
       sound.value.play();
     }
   } catch (e) {
-    console.error('播放/暂停操作失败:', e);
     error.value = '播放操作失败';
   }
 };
@@ -132,17 +118,14 @@ const updateProgress = () => {
         requestAnimationFrame(updateProgress);
       }
     } catch (e) {
-      console.error('更新进度失败:', e);
+      // 无需处理错误
     }
   }
 };
 
 // 跳转到指定位置
 const seek = (event) => {
-  console.log('点击进度条');
-  
   if (!sound.value || !isLoaded.value) {
-    console.log('音频未加载，无法跳转');
     return;
   }
   
@@ -152,11 +135,8 @@ const seek = (event) => {
     const x = event.clientX - rect.left;
     const percentage = x / rect.width;
     
-    console.log('点击进度条位置:', percentage);
-    
     // 计算新位置
     const seekTime = duration.value * percentage;
-    console.log('跳转到时间点:', seekTime, '秒, 总时长:', duration.value);
     
     if (seekTime >= 0 && seekTime <= duration.value) {
       sound.value.seek(seekTime);
@@ -164,10 +144,9 @@ const seek = (event) => {
       // 更新UI
       currentTime.value = seekTime;
       progress.value = percentage * 100;
-      console.log('跳转成功, 当前进度:', progress.value, '%');
     }
   } catch (e) {
-    console.error('跳转操作失败:', e);
+    // 无需处理错误
   }
 };
 
@@ -188,7 +167,6 @@ const downloadAudio = () => {
 
 // 监听src属性变化，重新初始化播放器
 watch(() => props.src, (newSrc, oldSrc) => {
-  console.log('音频源变更:', oldSrc, '->', newSrc);
   if (newSrc && newSrc !== oldSrc) {
     // 重置状态
     isPlaying.value = false;
@@ -202,7 +180,6 @@ watch(() => props.src, (newSrc, oldSrc) => {
 
 // 组件挂载时初始化
 onMounted(() => {
-  console.log('音频播放器组件挂载');
   if (props.src) {
     initSound();
   }
@@ -210,7 +187,6 @@ onMounted(() => {
 
 // 组件卸载时销毁Howl实例
 onUnmounted(() => {
-  console.log('音频播放器组件卸载');
   if (sound.value) {
     sound.value.unload();
     sound.value = null;

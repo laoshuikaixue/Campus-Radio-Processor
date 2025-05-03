@@ -31,15 +31,12 @@ const backgroundProcessOutputName = ref('');
 // 获取所有未合并的音频文件
 const fetchAudioFiles = async () => {
   loading.value = true;
-  // error.value = ''; // 不在这里清除 error，以免上传成功/重复的提示消息闪没
-
+  error.value = '';
+  
   try {
     const response = await axios.get('http://localhost:8000/api/audio');
     audioFiles.value = response.data;
-    console.log('文件列表获取成功:', audioFiles.value);
   } catch (err) {
-    console.error('获取音频文件失败:', err);
-    // 如果获取列表失败，设置错误消息
     error.value = '无法加载音频文件列表';
   } finally {
     loading.value = false;
@@ -53,67 +50,29 @@ onMounted(() => {
 
 // 处理上传结果并刷新列表的方法，由父组件 App.vue 调用
 const processUploadedItems = (uploadedItems) => {
-  console.log('AudioList received upload results:', uploadedItems);
-
-  // 刷新列表，显示最新文件（会触发 fetchAudioFiles）
+  // 检查是否有上传结果
+  if (!uploadedItems || uploadedItems.length === 0) {
+    return;
+  }
+  
+  // 根据情况执行操作：
+  // 1. 如果有重复文件被检测到，显示相应的消息
+  // 2. 无论是否有新文件，都强制刷新列表
+  
+  let hasDuplicates = uploadedItems.some(item => item.isDuplicate);
+  
+  if (hasDuplicates) {
+    const duplicateNames = uploadedItems
+      .filter(item => item.isDuplicate)
+      .map(item => item.uploadedName || item.originalName)
+      .join(', ');
+    
+    error.value = `以下文件已存在，已忽略: ${duplicateNames}`;
+  }
+  
+  // 刷新文件列表
   fetchAudioFiles();
-
-  // --- 构建上传结果提示消息 ---
-  let successCount = 0;
-  let duplicateMessages = [];
-  let failedCount = 0; // 非HTTP错误，后端处理问题
-
-  if (uploadedItems && Array.isArray(uploadedItems)) {
-      uploadedItems.forEach(item => {
-          if (item && item.isDuplicate === true) { // 检查是否存在且为 true
-              const uploadedName = item.uploadedName || item.displayName || '未知文件';
-              const existingId = item.id || '未知ID';
-              duplicateMessages.push(`"${uploadedName}" (已存在，ID: ${existingId})`);
-          } else if (item && item.id) { // 否则，如果item有效并且有id，认为是新上传成功
-              successCount++;
-          } else {
-              failedCount++;
-              console.warn('上传结果中发现格式异常的项:', item);
-          }
-      });
-  } else {
-      console.error('后端返回的上传结果格式异常:', uploadedItems);
-      error.value = '上传处理完成，但解析结果失败。';
-      return;
-  }
-
-  // 构建并设置提示消息
-  let resultMessageParts = [];
-  if (successCount > 0) {
-    resultMessageParts.push(`${successCount} 个文件上传成功`);
-  }
-  if (duplicateMessages.length > 0) {
-    resultMessageParts.push(`${duplicateMessages.length} 个文件重复：${duplicateMessages.join('；')}`); // 使用分号连接不同的重复项
-  }
-  if (failedCount > 0) {
-      resultMessageParts.push(`${failedCount} 个文件处理失败`);
-  }
-
-  // 如果有任何结果信息，设置 error 变量来显示
-  if (resultMessageParts.length > 0) {
-      error.value = resultMessageParts.join('；') + '。'; // 使用分号连接不同的提示部分
-
-      // 可以在几秒后清除消息
-      setTimeout(() => {
-          if (error.value === resultMessageParts.join('；') + '。') {
-              error.value = '';
-          }
-      }, 8000); // 消息显示 8 秒
-  } else if (uploadedItems.length === 0) {
-        error.value = '上传操作完成，但没有文件被处理。';
-         setTimeout(() => {
-            if (error.value === '上传操作完成，但没有文件被处理。') {
-                error.value = '';
-            }
-        }, 5000);
-  }
 };
-
 
 // 删除音频文件
 const deleteFile = async (id) => {
@@ -121,26 +80,21 @@ const deleteFile = async (id) => {
 
   try {
     await axios.delete(`http://localhost:8000/api/audio/${id}`);
-    fetchAudioFiles(); // 删除成功后刷新列表
-    error.value = ''; // 清除可能的旧错误
+    audioFiles.value = audioFiles.value.filter(file => file.id !== id);
   } catch (err) {
-    console.error('删除文件失败:', err);
-    error.value = err.response?.data?.detail || '删除文件时出错';
+    error.value = '删除文件时出错';
   }
 };
 
 // 删除所有音频文件
 const deleteAllFiles = async () => {
-  if (!confirm('确定要删除所有待处理音频文件吗？此操作不可恢复！')) return;
+  if (!confirm('确定要删除所有音频文件吗？此操作不可恢复！')) return;
 
   try {
     await axios.delete('http://localhost:8000/api/audio/all');
-    audioFiles.value = []; // 快速清空本地列表
-    fetchAudioFiles(); // 确保状态一致
-    error.value = ''; // 清除可能的旧错误
+    audioFiles.value = [];
   } catch (err) {
-    console.error('删除所有文件失败:', err);
-    error.value = err.response?.data?.detail || '删除所有文件时出错';
+    error.value = '删除所有文件时出错';
   }
 };
 
@@ -463,12 +417,8 @@ const saveEdit = async (file) => {
 
     editingFile.value = null;
     newDisplayName.value = '';
-    error.value = ''; // 清除错误
-    // 可以在这里显示重命名成功提示
-    // error.value = `文件 "${response.data.displayName}" 重命名成功！`;
-    // setTimeout(() => { error.value = ''; }, 3000);
+    error.value = '';
   } catch (err) {
-    console.error('更新文件名失败:', err);
     error.value = err.response?.data?.detail || '更新文件名时出错';
   }
 };
@@ -515,9 +465,8 @@ const onDrop = async (targetFile) => {
   const targetIndex = audioFiles.value.findIndex(file => file.id === targetFile.id);
 
   if (sourceIndex === -1 || targetIndex === -1) {
-      console.error("拖拽源或目标文件未找到");
-      draggedItem.value = null;
-      return;
+    draggedItem.value = null;
+    return;
   }
 
   const newOrderList = [...audioFiles.value];
@@ -525,7 +474,7 @@ const onDrop = async (targetFile) => {
   newOrderList.splice(targetIndex, 0, movedItem);
 
   newOrderList.forEach((file, index) => {
-      file.order = index + 1;
+    file.order = index + 1;
   });
 
   audioFiles.value = newOrderList;
@@ -534,11 +483,10 @@ const onDrop = async (targetFile) => {
     await axios.post('http://localhost:8000/api/reorder', {
       newOrder: audioFiles.value.map(file => file.id)
     });
-    error.value = ''; // 清除可能的旧错误
+    error.value = '';
   } catch (err) {
-    console.error('更新排序失败:', err);
     error.value = err.response?.data?.detail || '更新音频排序时出错';
-    fetchAudioFiles(); // 如果失败，回退到后端的状态
+    fetchAudioFiles();
   } finally {
     draggedItem.value = null;
   }
@@ -557,45 +505,27 @@ const vFocus = {
 
 // 添加取消后台处理方法
 const cancelBackgroundProcessing = async () => {
-  if (!processingRequestId.value || !canCancelProcessing.value) return;
+  if (!backgroundProcessing.value || !canCancelProcessing.value) return;
   
   try {
-    backgroundProcessStatusText.value = '正在取消处理...';
-    
-    // 调用取消处理API
     await axios.post('http://localhost:8000/api/cancel-processing', {
-      requestId: processingRequestId.value
+      requestId: backgroundProcessingId.value
     });
     
-    // 更新状态
+    // 取消成功后重置状态
     backgroundProcessing.value = false;
     backgroundProcessProgress.value = 0;
-    backgroundProcessStatusText.value = '处理已取消';
     backgroundProcessOutputName.value = '';
-    processingRequestId.value = null;
+    backgroundProcessStatusText.value = '';
+    backgroundProcessingId.value = '';
+    canCancelProcessing.value = false;
     
-    // 清除定时器
-    if (mergeProgressInterval.value) {
-      clearInterval(mergeProgressInterval.value);
-      mergeProgressInterval.value = null;
-    }
+    // 刷新文件列表，以防有些状态变化
+    fetchAudioFiles();
     
-    // 显示提示消息
     error.value = '后台处理已取消';
-    setTimeout(() => { 
-      if (error.value === '后台处理已取消') {
-        error.value = '';
-      }
-    }, 3000);
-    
   } catch (err) {
-    console.error('取消后台处理失败:', err);
-    error.value = '取消后台处理任务失败';
-    setTimeout(() => { 
-      if (error.value === '取消后台处理任务失败') {
-        error.value = '';
-      }
-    }, 3000);
+    error.value = '取消后台处理失败，请稍后再试';
   }
 };
 

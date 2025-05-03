@@ -18,7 +18,6 @@ const fetchProcessedFiles = async () => {
     const response = await axios.get('http://localhost:8000/api/processed');
     processedFiles.value = response.data;
   } catch (err) {
-    console.error('获取已处理音频文件失败:', err);
     error.value = '无法加载已处理音频文件列表';
   } finally {
     loading.value = false;
@@ -43,7 +42,6 @@ const deleteFile = async (id) => {
     await axios.delete(`http://localhost:8000/api/processed/${id}`);
     processedFiles.value = processedFiles.value.filter(file => file.id !== id);
   } catch (err) {
-    console.error('删除文件失败:', err);
     error.value = '删除文件时出错';
   }
 };
@@ -56,7 +54,6 @@ const deleteAllProcessedFiles = async () => {
     await axios.delete('http://localhost:8000/api/processed/all');
     processedFiles.value = [];
   } catch (err) {
-    console.error('删除所有已处理文件失败:', err);
     error.value = '删除所有已处理文件时出错';
   }
 };
@@ -72,6 +69,7 @@ const startEdit = (file) => {
 // 保存编辑后的文件名
 const saveEdit = async (file) => {
   if (!newDisplayName.value.trim()) {
+    error.value = '显示名称不能为空';
     return;
   }
 
@@ -80,18 +78,15 @@ const saveEdit = async (file) => {
       displayName: newDisplayName.value.trim()
     });
 
-    // 更新本地数据
     const index = processedFiles.value.findIndex(f => f.id === file.id);
     if (index !== -1) {
       processedFiles.value[index].displayName = response.data.displayName;
     }
 
-    // 重置编辑状态
     editingFile.value = null;
     newDisplayName.value = '';
   } catch (err) {
-    console.error('更新文件名失败:', err);
-    error.value = '更新文件名时出错';
+    error.value = err.response?.data?.detail || '更新文件名时出错';
   }
 };
 

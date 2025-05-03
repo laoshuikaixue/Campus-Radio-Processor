@@ -10,36 +10,28 @@ const processedAudioListRef = ref(null); // 创建对已处理列表组件实例
 // 处理 AudioUploader 上传成功后的回调函数
 // AudioUploader 组件会通过 props 将后端返回的上传结果列表传递给这个方法
 const handleUploadSuccess = (uploadedItems) => {
-  console.log("App.vue 接收到上传成功通知", uploadedItems);
   // 调用 AudioList 组件的方法来处理上传结果并刷新列表
   // 假设 AudioList 组件有一个名为 processUploadedItems 的方法来接收并处理上传成功的项
   if (audioListRef.value && audioListRef.value.processUploadedItems) {
     audioListRef.value.processUploadedItems(uploadedItems);
-  } else {
-      console.error("AudioList 组件引用或 processUploadedItems 方法不可用.");
-      // 如果无法调用特定处理方法，至少尝试刷新待处理列表
-      if (audioListRef.value && audioListRef.value.fetchAudioFiles) {
-          audioListRef.value.fetchAudioFiles();
-      }
+  } else if (audioListRef.value && audioListRef.value.fetchAudioFiles) {
+    // 如果无法调用特定处理方法，至少尝试刷新待处理列表
+    audioListRef.value.fetchAudioFiles();
   }
 };
 
 // 处理 AudioList 或 ProcessedAudioList 完成处理（例如合并）后的回调函数
 // ProcessedAudioList 也应该会触发 'process-success' 事件
 const handleProcessSuccess = (processedItem) => {
-  console.log("App.vue 接收到处理成功通知", processedItem);
   // 处理成功后，通常需要刷新 已处理列表ProcessedAudioList
   // 假设 ProcessedAudioList 组件有一个名为 fetchProcessedFiles 的方法来刷新列表
   if (processedAudioListRef.value && processedAudioListRef.value.fetchProcessedFiles) {
-      processedAudioListRef.value.fetchProcessedFiles();
-  } else {
-       console.error("ProcessedAudioList 组件引用或 fetchProcessedFiles 方法不可用.");
+    processedAudioListRef.value.fetchProcessedFiles();
   }
+  
   // 同时，如果处理（合并）成功，原始文件可能从待处理列表移除，所以也需要刷新 待处理列表AudioList
-    if (audioListRef.value && audioListRef.value.fetchAudioFiles) {
-      audioListRef.value.fetchAudioFiles();
-  } else {
-       console.error("AudioList 组件引用或 fetchAudioFiles 方法不可用.");
+  if (audioListRef.value && audioListRef.value.fetchAudioFiles) {
+    audioListRef.value.fetchAudioFiles();
   }
 };
 </script>

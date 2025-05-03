@@ -33,6 +33,7 @@ METADATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'audio_
 # 存储当前处理任务的ID和状态
 processing_tasks = {}
 
+
 # 数据模型
 class AudioUpdate(BaseModel):
     displayName: Optional[str] = None
@@ -331,7 +332,7 @@ def merge_audio(request: MergeRequest):
         raise HTTPException(status_code=400, detail="必须提供输出文件名")
 
     merged_output_name = request.outputName.strip()
-    
+
     # 获取请求ID，用于取消处理
     request_id = getattr(request, 'requestId', str(uuid.uuid4()))
     processing_tasks[request_id] = {'status': 'processing', 'cancelled': False}
@@ -371,7 +372,7 @@ def merge_audio(request: MergeRequest):
                 if request_id in processing_tasks:
                     processing_tasks[request_id]['status'] = 'cancelled'
                 return {"success": False, "message": "处理任务已被取消", "status": "cancelled"}
-                
+
             try:
                 audio = AudioSegment.from_file(file_info['path'])
                 total_duration += len(audio) / 1000  # 转换为秒
@@ -386,25 +387,25 @@ def merge_audio(request: MergeRequest):
                 if request_id in processing_tasks:
                     processing_tasks[request_id]['status'] = 'cancelled'
                 return {"success": False, "message": "处理任务已被取消", "status": "cancelled"}
-                
+
             try:
                 # 记录开始处理当前文件
                 print(f"处理文件 {idx + 1}/{len(files_to_merge)}: {file_info['displayName']}")
-                
+
                 # 加载当前音频段
                 audio = AudioSegment.from_file(file_info['path'])
-                
+
                 # 如果是第一个文件，初始化合并音频
                 if merged_audio is None:
                     merged_audio = audio
                 else:
                     # 合并当前音频段
                     merged_audio += audio
-                
+
                 # 计算并打印进度
                 progress = (idx + 1) / len(files_to_merge) * 100
                 print(f"合并进度: {progress:.2f}%")
-                
+
             except Exception as e:
                 error_msg = f"合并文件 {file_info['displayName']} 时出错: {str(e)}"
                 print(error_msg)
@@ -420,7 +421,7 @@ def merge_audio(request: MergeRequest):
         # 导出合并后的音频文件
         print(f"导出合并文件到: {output_path}")
         merged_audio.export(output_path, format="mp3")
-        
+
         # 创建合并后的音频文件元数据
         merged_file_info = {
             'id': str(uuid.uuid4()),
@@ -435,14 +436,14 @@ def merge_audio(request: MergeRequest):
 
         # 将合并后的音频文件元数据添加到总元数据列表中
         metadata.append(merged_file_info)
-        
+
         # 保存更新后的元数据
         save_metadata(metadata)
-        
+
         # 更新处理状态
         if request_id in processing_tasks:
             processing_tasks[request_id]['status'] = 'completed'
-        
+
         # 返回合并后的音频文件元数据
         return merged_file_info
 
@@ -455,11 +456,11 @@ def merge_audio(request: MergeRequest):
                 os.remove(output_path)
             except:
                 pass
-        
+
         # 更新处理状态
         if request_id in processing_tasks:
             processing_tasks[request_id]['status'] = 'failed'
-            
+
         raise HTTPException(status_code=500, detail=error_msg)
 
 
@@ -469,14 +470,14 @@ def cancel_processing(request: dict):
     request_id = request.get('requestId')
     if not request_id:
         raise HTTPException(status_code=400, detail="未提供处理任务ID")
-    
+
     if request_id not in processing_tasks:
         raise HTTPException(status_code=404, detail="找不到指定的处理任务")
-    
+
     # 标记任务为已取消
     processing_tasks[request_id]['cancelled'] = True
     processing_tasks[request_id]['status'] = 'cancelled'
-    
+
     return {"success": True, "message": "处理任务已标记为取消"}
 
 

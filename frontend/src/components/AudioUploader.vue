@@ -82,76 +82,53 @@ const handleDrop = (event) => {
   document.getElementById('audio-file').value = ''; // 清空文件输入框的值
 };
 
-// 执行文件上传
+// 上传文件到服务器
 const uploadFiles = async () => {
   if (files.value.length === 0) {
-    errorMessage.value = '请选择或拖拽音频文件';
+    errorMessage.value = '请先选择文件';
     return;
   }
 
-  // 如果 errorMessage 已存在（来自文件选择/拖拽的验证），阻止上传
-  if (errorMessage.value) {
-    // 可以在这里给一个额外的提示，说明为什么不能上传（因为有文件类型错误）
-    // alert(errorMessage.value);
-    return;
-  }
-
-  uploading.value = true; // 设置上传状态为真
-  uploadProgress.value = 0; // 重置并开始显示进度条
-  errorMessage.value = ''; // 清除之前的错误消息
+  uploading.value = true;
+  errorMessage.value = '';
+  uploadProgress.value = 0;
 
   try {
     const formData = new FormData();
-    files.value.forEach(fileItem => {
-      formData.append('files', fileItem); // 使用正确的字段名 'files'
+    files.value.forEach(file => {
+      formData.append('files', file);
     });
 
+    // 使用axios上传文件，设置进度监听
     const response = await axios.post('http://localhost:8000/api/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       },
       onUploadProgress: (progressEvent) => {
-        // 计算上传进度百分比
-        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        uploadProgress.value = percentCompleted;
+        if (progressEvent.total) {
+          // 计算上传进度百分比 (0-100)
+          uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        }
       }
     });
 
-    // 上传成功（axios 接收到 2xx 状态码）
-    errorMessage.value = ''; // 成功时清除错误消息
-    uploadProgress.value = 100; // 完成时进度显示 100%
+    // 上传成功，清空选择的文件
+    files.value = [];
+    uploadProgress.value = 100;
 
-    if (props.onUploadSuccess) {
-      // 调用父组件的回调，将后端返回的数据（包含处理结果）传递过去
-      // 这个调用如果在父组件中抛出错误，会被下面的 catch 捕获
+    // 如果父组件提供了上传成功的回调，调用它并传递上传结果
+    if (props.onUploadSuccess && typeof props.onUploadSuccess === 'function') {
       props.onUploadSuccess(response.data);
     }
-
-    // 清空文件列表和文件输入框，延迟一点执行让用户看到 100%
-    setTimeout(() => {
-        files.value = [];
-        document.getElementById('audio-file').value = '';
-        uploadProgress.value = 0; // 重置进度条到 0
-    }, 1000); // 延迟 1 秒
-
   } catch (error) {
-    // 处理上传错误（非 2xx 状态码 或 try 块中其他错误，包括回调函数错误）
-    console.error('上传错误:', error);
-    // 尝试从响应中获取详细错误信息，否则显示通用消息
-    errorMessage.value = error.response?.data?.detail || '上传文件时出错';
-
-    // 如果错误发生在回调函数中，error.response 是 undefined
-    if (!error.response) {
-      console.error('非HTTP响应错误 (可能回调函数出错):', error.message);
-      // 保持通用的"上传文件时出错"提示
-      errorMessage.value = '上传文件时出错';
+    // 处理HTTP错误
+    if (error.response) {
+      errorMessage.value = error.response.data.detail || '上传失败';
+    } else {
+      errorMessage.value = '网络错误，请检查连接后重试';
     }
-    uploadProgress.value = 0; // 错误时重置进度条
-    // 错误发生时不清空文件列表和输入框，可能用户想重新尝试
-    // files.value = [];
-    // document.getElementById('audio-file').value = '';
   } finally {
-    uploading.value = false; // 无论成功或失败，都结束上传状态
+    uploading.value = false;
   }
 };
 
