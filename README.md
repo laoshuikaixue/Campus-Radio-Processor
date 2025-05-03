@@ -101,19 +101,6 @@ npm run dev
 
 前端应用将在 http://localhost:5173 上运行。
 
-## 分离部署指南
-
-### 前端部署到Vercel
-
-1. Fork或Clone此仓库到你的GitHub账号
-2. 登录Vercel并导入项目，选择frontend目录作为根目录
-3. 在环境变量设置中添加`VITE_API_BASE_URL`并设置为你的后端API地址
-4. 点击部署按钮，等待部署完成
-
-或者直接点击以下按钮（需调整你的仓库URL）:
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fusername%2Fcampus-radio-processor&project-name=campus-radio-frontend&root-directory=frontend&env=VITE_API_BASE_URL)
-
 ### 后端部署选项
 
 后端需要一个支持Python和文件存储的环境，可选择以下部署方案：
