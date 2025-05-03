@@ -200,6 +200,18 @@ const createDarkModeStyles = () => {
         border-color: #495057;
       }
       
+      :root.dark-mode .merge-progress-bar-bg {
+        background-color: #495057;
+      }
+      
+      :root.dark-mode .merge-progress-text {
+        color: #e9ecef;
+      }
+      
+      :root.dark-mode .processing-status-text {
+        color: #adb5bd;
+      }
+      
       :root.dark-mode .audio-list-container,
       :root.dark-mode .processed-list-container {
         background-color: #2c3034;

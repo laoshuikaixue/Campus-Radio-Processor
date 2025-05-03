@@ -701,7 +701,22 @@ const addDialogToBody = () => {
   });
   
   document.getElementById('close-dialog-btn')?.addEventListener('click', () => {
-    closeMergeDialog();
+    // 如果正在处理并且可以取消，则切换到后台处理模式
+    if (processingMerge.value && canCancelProcessing.value) {
+      closeMergeDialog();
+    } else {
+      // 正常关闭前先添加退出动画
+      const dialog = document.getElementById('merge-dialog');
+      if (dialog) {
+        dialog.classList.add('dialog-exit');
+        // 等待动画完成后调用关闭方法
+        setTimeout(() => {
+          closeMergeDialog();
+        }, 280);
+      } else {
+        closeMergeDialog();
+      }
+    }
   });
   
   // 如果正在处理，开始更新进度
@@ -814,7 +829,17 @@ const startDialogProgressUpdates = () => {
 const removeDialogFromBody = () => {
   const overlay = document.getElementById('merge-dialog-overlay');
   if (overlay) {
-    overlay.remove();
+    const dialog = document.getElementById('merge-dialog');
+    if (dialog) {
+      // 添加退出动画
+      dialog.classList.add('dialog-exit');
+      // 等待动画完成后删除元素
+      setTimeout(() => {
+        overlay.remove();
+      }, 300); // 动画持续时间
+    } else {
+      overlay.remove();
+    }
   }
 };
 </script>
@@ -947,23 +972,50 @@ const removeDialogFromBody = () => {
   background-color: rgba(0, 0, 0, 0.5);
   z-index: 9999;
   overflow: hidden;
+  animation: fade-in 0.3s ease;
 }
 
 .merge-dialog {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(1);
   background-color: var(--dialog-bg, white);
   border-radius: 8px;
   padding: 20px;
   width: 90%;
   max-width: 500px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  animation: fade-in 0.3s ease;
+  animation: dialog-enter 0.4s ease;
   z-index: 10000;
   max-height: 80vh;
   overflow-y: auto;
+}
+
+@keyframes dialog-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes dialog-exit {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+}
+
+.dialog-exit {
+  animation: dialog-exit 0.3s ease forwards;
 }
 
 .merge-dialog h3 {
@@ -1055,6 +1107,7 @@ const removeDialogFromBody = () => {
   cursor: not-allowed;
 }
 
+/* 添加处理进度条样式 */
 .merge-progress-container {
   margin: 20px 0;
   width: 100%;
@@ -1086,6 +1139,20 @@ const removeDialogFromBody = () => {
   animation: pulse-animation 1.5s infinite;
 }
 
+@keyframes pulse-animation {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-100px);
+    opacity: 0;
+  }
+}
+
 .merge-progress-text {
   text-align: center;
   margin-top: 5px;
@@ -1101,26 +1168,209 @@ const removeDialogFromBody = () => {
   animation: fade-in 0.3s ease;
 }
 
-.cancel-processing-btn {
-  background-color: #ff9800;
-  color: white;
+/* 交互动画效果 */
+.audio-item-transition-enter-active,
+.audio-item-transition-leave-active {
+  transition: all 0.5s ease;
+}
+
+.audio-item-transition-enter-from,
+.audio-item-transition-leave-to {
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+.audio-item-transition-leave-active {
+  position: absolute;
+  width: 100%;
+}
+
+.delete-icon::before {
+  content: "🗑️";
+  margin-right: 8px;
+}
+
+/* 按钮和图标样式 */
+.merge-icon::before {
+  content: "🔄";
+  margin-right: 8px;
+}
+
+/* 合并对话框样式 */
+.merge-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  overflow: hidden;
+  animation: fade-in 0.3s ease;
+}
+
+.merge-dialog {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  background-color: var(--dialog-bg, white);
+  border-radius: 8px;
+  padding: 20px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  animation: dialog-enter 0.4s ease;
+  z-index: 10000;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+@keyframes dialog-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes dialog-exit {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+}
+
+.dialog-exit {
+  animation: dialog-exit 0.3s ease forwards;
+}
+
+.merge-dialog h3 {
+  margin-top: 0;
+  color: var(--dialog-title-color, #2196f3);
+  font-weight: bold;
+  border-bottom: 1px solid var(--dialog-title-border, #e0e0e0);
+  padding-bottom: 10px;
+  margin-bottom: 15px;
+}
+
+.merge-form {
+  margin: 15px 0;
+}
+
+.merge-form label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.merge-form input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.selected-files-info {
+  margin: 15px 0;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.selected-files-info ul {
+  padding-left: 20px;
+  margin: 5px 0;
+}
+
+.selected-files-info li {
+  border: none;
+  padding: 2px 0;
+  background-color: transparent;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.confirm-btn, .cancel-btn {
+  padding: 10px 20px;
   border: none;
   border-radius: 6px;
-  padding: 10px 20px;
   cursor: pointer;
   font-weight: bold;
   transition: all 0.3s ease;
 }
 
-.cancel-processing-btn:hover:not(:disabled) {
-  background-color: #f57c00;
+.confirm-btn {
+  background-color: #2196f3;
+  color: white;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  background-color: #0b7dda;
   transform: translateY(-2px);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.cancel-processing-btn:disabled {
+.confirm-btn:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
+}
+
+.cancel-btn {
+  background-color: #f5f5f5;
+  color: #555;
+  border: 1px solid #ddd;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 添加处理进度条样式 */
+.merge-progress-container {
+  margin: 20px 0;
+  width: 100%;
+}
+
+.merge-progress-bar-bg {
+  height: 12px;
+  background-color: #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.merge-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #2196f3, #4caf50);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.merge-progress-pulse {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 15px;
+  background: rgba(255, 255, 255, 0.3);
+  animation: pulse-animation 1.5s infinite;
 }
 
 @keyframes pulse-animation {
@@ -1137,9 +1387,38 @@ const removeDialogFromBody = () => {
   }
 }
 
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.merge-progress-text {
+  text-align: center;
+  margin-top: 5px;
+  font-weight: bold;
+  color: #555;
+}
+
+.processing-status-text {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: #555;
+  text-align: center;
+  animation: fade-in 0.3s ease;
+}
+
+/* 添加取消成功的视觉提示样式 */
+.cancel-success {
+  color: #ff9800 !important;
+  font-weight: bold !important;
+  font-size: 1.1rem !important;
+  margin-top: 15px !important;
+  animation: pulse 1.5s infinite !important;
+}
+
+.canceled .merge-progress-bar {
+  background: linear-gradient(90deg, #ff9800, #ff5722) !important;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 1; }
+  100% { opacity: 0.7; }
 }
 </style>
 
@@ -1476,252 +1755,9 @@ h2 {
   cursor: not-allowed;
 }
 
-/* 合并对话框样式 */
-.merge-dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-  overflow: hidden; /* 防止滚动 */
-}
-
-.merge-dialog {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: var(--dialog-bg, white);
-  border-radius: 8px;
-  padding: 20px;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  animation: fade-in 0.3s ease;
-  z-index: 1001;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.merge-dialog h3 {
-  margin-top: 0;
-  color: var(--dialog-title-color, #2196f3);
-  font-weight: bold;
-  border-bottom: 1px solid var(--dialog-title-border, #e0e0e0);
-  padding-bottom: 10px;
-  margin-bottom: 15px;
-}
-
-.merge-form {
-  margin: 15px 0;
-}
-
-.merge-form label {
-  display: block;
-  margin-bottom: 5px;
-  font-weight: bold;
-}
-
-.merge-form input {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-}
-
-.selected-files-info {
-  margin: 15px 0;
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-.selected-files-info ul {
-  padding-left: 20px;
-  margin: 5px 0;
-}
-
-.selected-files-info li {
-    border: none;
-    padding: 2px 0;
-    background-color: transparent;
-}
-
-.dialog-actions {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 20px;
-}
-
-.confirm-btn, .cancel-btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: all 0.3s ease;
-}
-
-.confirm-btn {
-  background-color: #2196f3;
-  color: white;
-}
-
-.confirm-btn:hover:not(:disabled) {
-  background-color: #0b7dda;
-  transform: translateY(-2px);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-}
-
-.confirm-btn:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-.cancel-btn {
-  background-color: #f5f5f5;
-  color: #555;
-  border: 1px solid #ddd;
-}
-
-.cancel-btn:hover:not(:disabled) {
-  background-color: #e0e0e0;
-}
-
-.cancel-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* 添加处理进度条样式 */
-.merge-progress-container {
-  margin: 20px 0;
-  width: 100%;
-}
-
-.merge-progress-bar-bg {
-  height: 12px;
-  background-color: #e0e0e0;
-  border-radius: 6px;
-  overflow: hidden;
-  position: relative;
-}
-
-.merge-progress-bar {
-  height: 100%;
-  background: linear-gradient(90deg, #2196f3, #4caf50);
-  border-radius: 6px;
-  transition: width 0.3s ease;
-  position: relative;
-}
-
-.merge-progress-pulse {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 15px;
-  background: rgba(255, 255, 255, 0.3);
-  animation: pulse-animation 1.5s infinite;
-}
-
-@keyframes pulse-animation {
-  0% {
-    transform: translateX(0);
-    opacity: 0;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(-100px);
-    opacity: 0;
-  }
-}
-
-.merge-progress-text {
-  text-align: center;
-  margin-top: 5px;
-  font-weight: bold;
-  color: #555;
-}
-
-@media (max-width: 768px) {
-  .actions-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-  .left-actions {
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
-  }
-  .left-actions button {
-    width: 100%;
-    text-align: center;
-  }
-
-  .audio-item-header {
-    flex-direction: column;
-    align-items: flex-start;
-    margin-bottom: 10px;
-  }
-
-  .select-container {
-    margin-bottom: 10px;
-  }
-
-  .audio-actions {
-    margin-top: 10px;
-    justify-content: flex-start;
-  }
-
-  .edit-name-form {
-    width: 100%;
-  }
-
-  .audio-name-container {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 5px;
-  }
-  .audio-name {
-      margin-right: 0;
-  }
-}
-
-/* 交互动画效果 */
-.audio-item-transition-enter-active,
-.audio-item-transition-leave-active {
-  transition: all 0.5s ease;
-}
-
-.audio-item-transition-enter-from,
-.audio-item-transition-leave-to {
-  opacity: 0;
-  transform: translateY(30px);
-}
-
-.audio-item-transition-leave-active {
-  position: absolute;
-  width: 100%;
-}
-
 /* 按钮和图标样式 */
 .merge-icon::before {
   content: "🔄";
-  margin-right: 8px;
-}
-
-.delete-icon::before {
-  content: "🗑️";
   margin-right: 8px;
 }
 
