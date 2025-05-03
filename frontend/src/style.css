@@ -29,6 +29,11 @@
   --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.06);
   --transition-fast: 0.2s ease;
   --transition-normal: 0.3s ease;
+  
+  /* 弹窗相关变量 */
+  --dialog-title-color: #2196f3;
+  --dialog-title-border: #e0e0e0;
+  --dialog-bg: #ffffff;
 }
 
 * {

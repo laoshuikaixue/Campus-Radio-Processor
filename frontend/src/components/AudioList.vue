@@ -30,6 +30,7 @@ const backgroundProcessing = ref(false);
 const backgroundProcessProgress = ref(0);
 const backgroundProcessStatusText = ref('');
 const backgroundProcessOutputName = ref('');
+const backgroundProcessingId = ref(null); // 专门用于后台处理的请求ID
 
 // 获取所有未合并的音频文件
 const fetchAudioFiles = async () => {
@@ -124,6 +125,9 @@ const closeMergeDialog = () => {
     backgroundProcessProgress.value = mergeProgress.value;
     backgroundProcessStatusText.value = processingStatusText.value;
     backgroundProcessOutputName.value = mergeOutputName.value;
+    // 保存请求ID到后台处理专用变量
+    backgroundProcessingId.value = processingRequestId.value;
+    console.log('后台处理已启动，requestId:', backgroundProcessingId.value);
 
     // 关闭弹窗，但保持处理继续进行
     mergeDialogOpen.value = false;
@@ -150,6 +154,7 @@ const onBackgroundProcessComplete = (result) => {
   backgroundProcessProgress.value = 0;
   backgroundProcessStatusText.value = '';
   backgroundProcessOutputName.value = '';
+  backgroundProcessingId.value = null; // 清除后台处理ID
 
   // 显示处理完成提示
   if (result && result.displayName) {
@@ -513,16 +518,26 @@ const cancelBackgroundProcessing = async () => {
   if (!backgroundProcessing.value || !canCancelProcessing.value) return;
   
   try {
+    console.log('尝试取消后台处理，requestId:', backgroundProcessingId.value);
+    
+    // 如果没有requestId，显示错误并返回
+    if (!backgroundProcessingId.value) {
+      error.value = '无法取消处理：缺少处理任务ID';
+      return;
+    }
+    
     await api.cancelProcessing({
       requestId: backgroundProcessingId.value
     });
+    
+    console.log('后台处理取消成功');
     
     // 取消成功后重置状态
     backgroundProcessing.value = false;
     backgroundProcessProgress.value = 0;
     backgroundProcessOutputName.value = '';
     backgroundProcessStatusText.value = '';
-    backgroundProcessingId.value = '';
+    backgroundProcessingId.value = null;
     canCancelProcessing.value = false;
     
     // 刷新文件列表，以防有些状态变化
@@ -530,6 +545,7 @@ const cancelBackgroundProcessing = async () => {
     
     error.value = '后台处理已取消';
   } catch (err) {
+    console.error('取消后台处理失败:', err);
     error.value = '取消后台处理失败，请稍后再试';
   }
 };
@@ -938,7 +954,7 @@ const removeDialogFromBody = () => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background-color: white;
+  background-color: var(--dialog-bg, white);
   border-radius: 8px;
   padding: 20px;
   width: 90%;
@@ -952,7 +968,11 @@ const removeDialogFromBody = () => {
 
 .merge-dialog h3 {
   margin-top: 0;
-  color: #333;
+  color: var(--dialog-title-color, #2196f3);
+  font-weight: bold;
+  border-bottom: 1px solid var(--dialog-title-border, #e0e0e0);
+  padding-bottom: 10px;
+  margin-bottom: 15px;
 }
 
 .merge-form {
@@ -1396,6 +1416,11 @@ h2 {
   gap: 10px;
 }
 
+.background-processing-info span {
+  font-weight: bold;
+  color: #1976d2;
+}
+
 .background-progress-bar-bg {
   height: 12px;
   background-color: #e0e0e0;
@@ -1468,7 +1493,7 @@ h2 {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background-color: white;
+  background-color: var(--dialog-bg, white);
   border-radius: 8px;
   padding: 20px;
   width: 90%;
@@ -1482,7 +1507,11 @@ h2 {
 
 .merge-dialog h3 {
   margin-top: 0;
-  color: #333;
+  color: var(--dialog-title-color, #2196f3);
+  font-weight: bold;
+  border-bottom: 1px solid var(--dialog-title-border, #e0e0e0);
+  padding-bottom: 10px;
+  margin-bottom: 15px;
 }
 
 .merge-form {

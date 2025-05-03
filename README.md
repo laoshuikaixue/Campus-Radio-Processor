@@ -3,8 +3,10 @@
 这是一个专为校园广播站设计的音频处理系统，允许用户上传、合并、排序和管理音频文件。系统通过直观的用户界面，帮助广播站工作人员高效地处理和管理音频资源。
 
 ## 项目截图
-![image](https://github.com/user-attachments/assets/0530c61f-8c5f-41cd-9b5d-8aa531407b50)
-![image](https://github.com/user-attachments/assets/973af9e3-9921-46bb-9347-2e8b502d7c69)
+![image](https://github.com/user-attachments/assets/cd1058ad-c01b-4490-8f62-9cbd494d97b6)
+![image](https://github.com/user-attachments/assets/e4d7d424-d3dc-487e-a02a-e5bc2132eeb6)
+![image](https://github.com/user-attachments/assets/d96e50f4-07f2-4373-b40d-65c3f4e5a5bf)
+
 
 ## 功能特点
 
@@ -15,6 +17,7 @@
 - **音频文件重命名**：便捷修改音频文件显示名称
 - **音频音量标准化**：统一音频音量，避免不同音频音量差异太大
 - **前后端分离部署**：支持将前端部署到Vercel等静态托管平台，后端独立部署
+- **前端深浅色模式切换**：支持深色和浅色模式，适应不同用户的使用习惯
 
 ## 项目结构
 

@@ -71,6 +71,11 @@ const createDarkModeStyles = () => {
         --border-color: #495057;
         --card-bg: #2b3035;
         --box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.25);
+        
+        /* 弹窗相关变量 */
+        --dialog-title-color: #4dabf7;
+        --dialog-title-border: #495057;
+        --dialog-bg: #2c3034;
       }
       
       :root.dark-mode body {
@@ -109,6 +114,20 @@ const createDarkModeStyles = () => {
       
       :root.dark-mode .audio-item:hover {
         background-color: #3b4248;
+      }
+      
+      :root.dark-mode .background-processing-status {
+        background-color: #2c3034;
+        border-color: #495057;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+      
+      :root.dark-mode .background-progress-text {
+        color: #e9ecef;
+      }
+      
+      :root.dark-mode .background-processing-info span {
+        color: #4dabf7;
       }
       
       :root.dark-mode .app-footer {
@@ -166,6 +185,13 @@ const createDarkModeStyles = () => {
       :root.dark-mode .merge-dialog {
         background-color: #2c3034;
         color: #e9ecef;
+      }
+      
+      :root.dark-mode .merge-dialog h3 {
+        color: #4dabf7;
+        border-bottom: 1px solid #495057;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
       }
       
       :root.dark-mode .merge-form input {
