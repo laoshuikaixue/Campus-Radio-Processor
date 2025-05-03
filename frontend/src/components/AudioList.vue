@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, onUnmounted } from 'vue';
+import { ref, onMounted, computed, onUnmounted, onBeforeUnmount, watch } from 'vue';
 import axios from 'axios';
 import { audioState } from '../audioState';
 
@@ -21,6 +21,12 @@ const processingStatusText = ref('');
 const canCancelProcessing = ref(true); // 是否可以取消处理
 // 新增取消处理API调用ID
 const processingRequestId = ref(null);
+
+// 创建变量跟踪后台处理状态
+const backgroundProcessing = ref(false);
+const backgroundProcessProgress = ref(0);
+const backgroundProcessStatusText = ref('');
+const backgroundProcessOutputName = ref('');
 
 // 获取所有未合并的音频文件
 const fetchAudioFiles = async () => {
@@ -154,15 +160,20 @@ const openMergeDialog = () => {
 
 // 关闭合并对话框
 const closeMergeDialog = () => {
-  // 如果正在处理，先确认取消
+  // 如果正在处理，切换到后台处理模式
   if (processingMerge.value && canCancelProcessing.value) {
-    if (confirm('处理尚未完成，确定要取消吗？')) {
-      cancelProcessing();
-    } else {
-      return; // 用户不想取消，保持对话框打开
-    }
+    // 设置后台处理状态
+    backgroundProcessing.value = true;
+    backgroundProcessProgress.value = mergeProgress.value;
+    backgroundProcessStatusText.value = processingStatusText.value;
+    backgroundProcessOutputName.value = mergeOutputName.value;
+
+    // 关闭弹窗，但保持处理继续进行
+    mergeDialogOpen.value = false;
+    return;
   }
   
+  // 非处理状态下，正常关闭对话框
   mergeDialogOpen.value = false;
   mergeOutputName.value = '';
   error.value = ''; // 关闭对话框时清除消息
@@ -171,6 +182,26 @@ const closeMergeDialog = () => {
     clearInterval(mergeProgressInterval.value);
     mergeProgressInterval.value = null;
   }
+  
+  // 移除DOM中的弹窗
+  removeDialogFromBody();
+};
+
+// 后台处理完成时的回调
+const onBackgroundProcessComplete = (result) => {
+  backgroundProcessing.value = false;
+  backgroundProcessProgress.value = 0;
+  backgroundProcessStatusText.value = '';
+  backgroundProcessOutputName.value = '';
+
+  // 显示处理完成提示
+  if (result && result.displayName) {
+    error.value = `文件 "${result.displayName}" 处理成功！`;
+    setTimeout(() => { error.value = ''; }, 5000);
+  }
+  
+  // 刷新列表
+  fetchAudioFiles();
 };
 
 // 合并/处理列表中的所有音频文件
@@ -189,6 +220,9 @@ const mergeSelectedFiles = async () => {
   mergeProgress.value = 0; // 重置进度条
   processingStatusText.value = '正在准备处理任务...'; // 设置初始状态文本
   canCancelProcessing.value = true; // 重置可取消状态
+  
+  // 立即更新弹窗内容，切换按钮状态
+  updateDialogContent();
 
   // 启动进度模拟
   startProgressSimulation();
@@ -201,6 +235,8 @@ const mergeSelectedFiles = async () => {
     processingRequestId.value = Date.now().toString();
     
     processingStatusText.value = '正在提交处理任务...';
+    updateDialogContent(); // 更新状态文本
+    
     const response = await axios.post('http://localhost:8000/api/merge', {
       audioIds: audioFiles.value.map(file => file.id), // 始终处理所有文件
       outputName: mergeOutputName.value.trim(),
@@ -211,6 +247,8 @@ const mergeSelectedFiles = async () => {
     if (response.data && response.data.status === 'cancelled') {
       isCancelled = true;
       processingStatusText.value = '处理已取消';
+      updateDialogContent(); // 更新状态文本
+      
       stopProgressSimulation();
       mergeProgress.value = 0;
       
@@ -231,22 +269,27 @@ const mergeSelectedFiles = async () => {
       mergeProgress.value = 100;
       stopProgressSimulation();
       canCancelProcessing.value = false; // 处理完成后不可取消
+      
+      // 更新弹窗内容
+      updateDialogContent();
 
       emit('process-success', response.data); // 通知已处理文件列表的父组件
 
-      // 稍等片刻再关闭对话框，让用户看到100%进度
-      setTimeout(() => {
-        mergeDialogOpen.value = false;
-        processingRequestId.value = null; // 清空请求ID
-        
+      // 如果在弹窗中显示，等待关闭弹窗
+      if (mergeDialogOpen.value) {
+        // 不再自动关闭弹窗，而是等待用户点击"在后台继续处理"
         fetchAudioFiles(); // 刷新待处理列表
 
         // 显示处理成功提示
         if (response.data && response.data.displayName) {
-          error.value = `文件 "${response.data.displayName}" 处理成功！`;
-          setTimeout(() => { error.value = ''; }, 5000);
+          processingStatusText.value = `文件 "${response.data.displayName}" 处理成功！`;
+          // 更新弹窗状态文本
+          updateDialogContent();
         }
-      }, 800);
+      } else if (backgroundProcessing.value) {
+        // 如果是后台处理，调用完成回调
+        onBackgroundProcessComplete(response.data);
+      }
     }
   } catch (err) {
     console.error('处理文件失败:', err);
@@ -255,8 +298,21 @@ const mergeSelectedFiles = async () => {
     error.value = err.response?.data?.detail || '处理音频文件时出错';
     processingStatusText.value = '处理失败';
     processingRequestId.value = null; // 清空请求ID
+    
+    // 更新弹窗状态
+    updateDialogContent();
+
+    // 如果是后台处理，更新后台处理状态
+    if (!mergeDialogOpen.value && backgroundProcessing.value) {
+      backgroundProcessing.value = false;
+      backgroundProcessProgress.value = 0;
+      backgroundProcessStatusText.value = '处理失败';
+      setTimeout(() => { backgroundProcessStatusText.value = ''; }, 3000);
+    }
   } finally {
     processingMerge.value = false;
+    // 不在这里关闭弹窗，而是更新弹窗状态
+    updateDialogContent();
   }
 };
 
@@ -266,6 +322,8 @@ const cancelProcessing = async () => {
   
   try {
     processingStatusText.value = '正在取消处理...';
+    updateDialogContent(); // 立即更新弹窗显示取消中状态
+    
     await axios.post('http://localhost:8000/api/cancel-processing', {
       requestId: processingRequestId.value
     });
@@ -273,27 +331,46 @@ const cancelProcessing = async () => {
     stopProgressSimulation();
     mergeProgress.value = 0;
     processingStatusText.value = '处理已取消';
+    // 显示取消成功的视觉提示
+    const progressContainer = document.getElementById('progress-container');
+    if (progressContainer) {
+      progressContainer.classList.add('canceled');
+    }
+    
+    // 更新弹窗内容显示取消状态
+    updateDialogContent();
     
     // 设置标记表示任务已取消
     const taskCancelled = true;
     
+    // 更新按钮状态，但不自动关闭弹窗
+    processingMerge.value = false; 
+    canCancelProcessing.value = false;
+    
+    // 给用户一段时间查看取消结果，不自动关闭
     setTimeout(() => {
       if (!mergeDialogOpen.value) return; // 如果对话框已关闭，不执行
-      processingMerge.value = false;
-      processingRequestId.value = null;
       
-      // 如果对话框还打开着，1.5秒后自动关闭
-      setTimeout(() => {
-        if (mergeDialogOpen.value) {
-          mergeDialogOpen.value = false;
-        }
-      }, 1500);
+      // 显示一个明显的成功取消提示
+      const statusText = document.getElementById('status-text');
+      if (statusText) {
+        statusText.textContent = '任务已成功取消！';
+        statusText.classList.add('cancel-success');
+      }
+      
+      // 更新弹窗内容
+      updateDialogContent();
+      
+      // 清理请求ID
+      processingRequestId.value = null;
     }, 500);
     
     return taskCancelled; // 返回取消状态
   } catch (err) {
     console.error('取消处理失败:', err);
     error.value = '取消处理任务失败';
+    processingStatusText.value = '取消处理失败，请重试';
+    updateDialogContent();
     return false;
   }
 };
@@ -313,13 +390,32 @@ const startProgressSimulation = () => {
       const increment = (90 - mergeProgress.value) / 20;
       mergeProgress.value += Math.max(0.5, increment);
       
+      // 同步更新后台进度
+      if (backgroundProcessing.value) {
+        backgroundProcessProgress.value = mergeProgress.value;
+      }
+      
       // 根据进度更新状态文本
       if (mergeProgress.value > 10 && mergeProgress.value <= 30) {
         processingStatusText.value = '正在分析音频文件...';
+        if (backgroundProcessing.value) {
+          backgroundProcessStatusText.value = '正在分析音频文件...';
+        }
       } else if (mergeProgress.value > 30 && mergeProgress.value <= 60) {
         processingStatusText.value = '正在处理音频数据...';
+        if (backgroundProcessing.value) {
+          backgroundProcessStatusText.value = '正在处理音频数据...';
+        }
       } else if (mergeProgress.value > 60 && mergeProgress.value < 90) {
         processingStatusText.value = '正在合成最终音频...';
+        if (backgroundProcessing.value) {
+          backgroundProcessStatusText.value = '正在合成最终音频...';
+        }
+      }
+      
+      // 更新弹窗进度，但不重新创建弹窗
+      if (mergeDialogOpen.value) {
+        updateDialogContent();
       }
     }
   }, 300);
@@ -458,6 +554,262 @@ defineExpose({
 const vFocus = {
   mounted: (el) => el.focus()
 };
+
+// 添加取消后台处理方法
+const cancelBackgroundProcessing = async () => {
+  if (!processingRequestId.value || !canCancelProcessing.value) return;
+  
+  try {
+    backgroundProcessStatusText.value = '正在取消处理...';
+    
+    // 调用取消处理API
+    await axios.post('http://localhost:8000/api/cancel-processing', {
+      requestId: processingRequestId.value
+    });
+    
+    // 更新状态
+    backgroundProcessing.value = false;
+    backgroundProcessProgress.value = 0;
+    backgroundProcessStatusText.value = '处理已取消';
+    backgroundProcessOutputName.value = '';
+    processingRequestId.value = null;
+    
+    // 清除定时器
+    if (mergeProgressInterval.value) {
+      clearInterval(mergeProgressInterval.value);
+      mergeProgressInterval.value = null;
+    }
+    
+    // 显示提示消息
+    error.value = '后台处理已取消';
+    setTimeout(() => { 
+      if (error.value === '后台处理已取消') {
+        error.value = '';
+      }
+    }, 3000);
+    
+  } catch (err) {
+    console.error('取消后台处理失败:', err);
+    error.value = '取消后台处理任务失败';
+    setTimeout(() => { 
+      if (error.value === '取消后台处理任务失败') {
+        error.value = '';
+      }
+    }, 3000);
+  }
+};
+
+// 组件卸载前移除可能添加到body的弹窗
+onBeforeUnmount(() => {
+  removeDialogFromBody();
+});
+
+// 监听弹窗状态变化，动态添加/移除弹窗到body
+watch(mergeDialogOpen, (newVal) => {
+  if (newVal) {
+    addDialogToBody();
+  } else {
+    removeDialogFromBody();
+  }
+});
+
+// 在body中动态创建弹窗元素
+const addDialogToBody = () => {
+  // 确保之前的弹窗已移除
+  removeDialogFromBody();
+  
+  // 创建弹窗容器
+  const overlay = document.createElement('div');
+  overlay.id = 'merge-dialog-overlay';
+  overlay.className = 'merge-dialog-overlay';
+  
+  // 创建弹窗内容
+  const dialog = document.createElement('div');
+  dialog.className = 'merge-dialog';
+  dialog.id = 'merge-dialog';
+  
+  // 设置弹窗内容
+  dialog.innerHTML = `
+    <h3>处理音频文件</h3>
+    
+    <div class="merge-form">
+      <label for="merge-name">处理后的文件名:</label>
+      <input
+        type="text"
+        id="merge-name"
+        value="${mergeOutputName.value}"
+        ${processingMerge.value ? 'disabled' : ''}
+      />
+    </div>
+    
+    <div class="selected-files-info">
+      <p>即将处理列表中的全部文件 (${audioFiles.value.length}个):</p>
+      <ul>
+        ${audioFiles.value.map(file => `<li>${file.displayName}</li>`).join('')}
+      </ul>
+    </div>
+    
+    <div id="progress-container" class="merge-progress-container" ${(processingMerge.value || mergeProgress.value > 0) ? '' : 'style="display:none;"'}>
+      <div class="merge-progress-bar-bg">
+        <div id="progress-bar" class="merge-progress-bar" style="width: ${mergeProgress.value}%">
+          <div class="merge-progress-pulse" ${processingMerge.value ? '' : 'style="display:none;"'}></div>
+        </div>
+      </div>
+      <div id="progress-text" class="merge-progress-text">${Math.floor(mergeProgress.value)}%</div>
+      <div id="status-text" class="processing-status-text" ${processingStatusText.value ? '' : 'style="display:none;"'}>${processingStatusText.value}</div>
+    </div>
+    
+    <div class="dialog-actions">
+      ${!processingMerge.value ? `
+        <button id="confirm-merge-btn" ${(!mergeOutputName.value.trim() || processingMerge.value) ? 'disabled' : ''} class="confirm-btn">
+          处理
+        </button>
+      ` : `
+        <button id="cancel-process-btn" ${!canCancelProcessing.value ? 'disabled' : ''} class="cancel-processing-btn">
+          取消处理
+        </button>
+      `}
+      
+      <button id="close-dialog-btn" ${(processingMerge.value && !canCancelProcessing.value) ? 'disabled' : ''} class="cancel-btn">
+        ${processingMerge.value ? '在后台继续处理' : '关闭'}
+      </button>
+    </div>
+  `;
+  
+  // 将弹窗添加到body
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+  
+  // 添加事件监听
+  document.getElementById('merge-name')?.addEventListener('input', (e) => {
+    mergeOutputName.value = e.target.value;
+  });
+  
+  document.getElementById('confirm-merge-btn')?.addEventListener('click', () => {
+    mergeSelectedFiles();
+  });
+  
+  document.getElementById('cancel-process-btn')?.addEventListener('click', () => {
+    cancelProcessing();
+  });
+  
+  document.getElementById('close-dialog-btn')?.addEventListener('click', () => {
+    closeMergeDialog();
+  });
+  
+  // 如果正在处理，开始更新进度
+  if (processingMerge.value) {
+    startDialogProgressUpdates();
+  }
+};
+
+// 更新弹窗中的进度条和状态，无需重新创建整个弹窗
+const updateDialogContent = () => {
+  if (!mergeDialogOpen.value) return;
+  
+  const progressContainer = document.getElementById('progress-container');
+  const progressBar = document.getElementById('progress-bar');
+  const progressText = document.getElementById('progress-text');
+  const statusText = document.getElementById('status-text');
+  const progressPulse = document.querySelector('#progress-bar .merge-progress-pulse');
+  const closeButton = document.getElementById('close-dialog-btn');
+  const confirmButton = document.getElementById('confirm-merge-btn');
+  const cancelProcessButton = document.getElementById('cancel-process-btn');
+  const actionsContainer = document.querySelector('.dialog-actions');
+  
+  if (!progressContainer || !progressBar || !progressText || !statusText || !actionsContainer) return;
+  
+  // 确保进度容器显示
+  if (processingMerge.value || mergeProgress.value > 0) {
+    progressContainer.style.display = '';
+  } else {
+    progressContainer.style.display = 'none';
+  }
+  
+  // 更新进度条
+  progressBar.style.width = `${mergeProgress.value}%`;
+  
+  // 更新进度文本
+  progressText.textContent = `${Math.floor(mergeProgress.value)}%`;
+  
+  // 更新状态文本
+  if (processingStatusText.value) {
+    statusText.textContent = processingStatusText.value;
+    statusText.style.display = '';
+  } else {
+    statusText.style.display = 'none';
+  }
+  
+  // 更新脉动效果
+  if (progressPulse) {
+    progressPulse.style.display = processingMerge.value ? '' : 'none';
+  }
+  
+  // 更新按钮文本
+  if (closeButton) {
+    closeButton.textContent = processingMerge.value ? '在后台继续处理' : '关闭';
+    closeButton.disabled = (processingMerge.value && !canCancelProcessing.value);
+  }
+  
+  // 更新处理/取消按钮
+  if (processingMerge.value) {
+    // 如果正在处理，显示取消按钮，隐藏确认按钮
+    if (confirmButton) {
+      confirmButton.style.display = 'none';
+    }
+    
+    // 如果没有取消按钮，创建一个
+    if (!cancelProcessButton) {
+      const cancelBtn = document.createElement('button');
+      cancelBtn.id = 'cancel-process-btn';
+      cancelBtn.className = 'cancel-processing-btn';
+      cancelBtn.textContent = '取消处理';
+      cancelBtn.disabled = !canCancelProcessing.value;
+      cancelBtn.addEventListener('click', () => {
+        cancelProcessing();
+      });
+      
+      // 在关闭按钮之前插入取消按钮
+      if (closeButton && closeButton.parentNode) {
+        closeButton.parentNode.insertBefore(cancelBtn, closeButton);
+      }
+    } else {
+      cancelProcessButton.style.display = '';
+      cancelProcessButton.disabled = !canCancelProcessing.value;
+    }
+  } else {
+    // 如果不在处理，显示确认按钮，隐藏取消按钮
+    if (cancelProcessButton) {
+      cancelProcessButton.style.display = 'none';
+    }
+    
+    if (confirmButton) {
+      confirmButton.style.display = '';
+      confirmButton.disabled = !mergeOutputName.value.trim() || processingMerge.value;
+    }
+  }
+};
+
+// 开始定期更新弹窗进度
+const startDialogProgressUpdates = () => {
+  updateDialogContent();
+  
+  // 定期更新，但不太频繁以避免性能问题
+  setTimeout(() => {
+    if (mergeDialogOpen.value && processingMerge.value) {
+      updateDialogContent();
+      startDialogProgressUpdates();
+    }
+  }, 200);
+};
+
+// 从body中移除弹窗
+const removeDialogFromBody = () => {
+  const overlay = document.getElementById('merge-dialog-overlay');
+  if (overlay) {
+    overlay.remove();
+  }
+};
 </script>
 
 <template>
@@ -465,6 +817,23 @@ const vFocus = {
     <h2>待处理音频文件列表</h2>
 
     <p v-if="error" class="error-message">{{ error }}</p>
+
+    <!-- 添加后台处理状态指示器 -->
+    <div v-if="backgroundProcessing" class="background-processing-status">
+      <div class="background-processing-info">
+        <span>正在后台处理: {{ backgroundProcessOutputName }}</span>
+        <div class="background-progress-bar-bg">
+          <div class="background-progress-bar" :style="{ width: `${backgroundProcessProgress}%` }">
+            <div class="background-progress-pulse" v-if="backgroundProcessProgress < 100"></div>
+          </div>
+        </div>
+        <div class="background-progress-text">{{ Math.floor(backgroundProcessProgress) }}% - {{ backgroundProcessStatusText }}</div>
+        <!-- 添加取消后台处理按钮 -->
+        <button @click="cancelBackgroundProcessing" class="cancel-background-btn" :disabled="!canCancelProcessing">
+          取消处理
+        </button>
+      </div>
+    </div>
 
     <div v-if="loading" class="loading-indicator">
       <div class="loading-spinner"></div>
@@ -557,72 +926,211 @@ const vFocus = {
         </transition-group>
       </div>
     </div>
-
-    <div v-if="mergeDialogOpen" class="merge-dialog-overlay">
-      <div class="merge-dialog">
-        <h3>处理音频文件</h3>
-
-        <div class="merge-form">
-          <label for="merge-name">处理后的文件名:</label>
-          <input
-            type="text"
-            id="merge-name"
-            v-model="mergeOutputName"
-            :disabled="processingMerge"
-          />
-        </div>
-
-        <div class="selected-files-info">
-          <p>即将处理列表中的全部文件 ({{ audioFiles.length }}个):</p>
-          <ul>
-            <li v-for="file in audioFiles" :key="file.id">
-              {{ file.displayName }}
-            </li>
-          </ul>
-        </div>
-
-        <!-- 添加处理进度条 -->
-        <div v-if="processingMerge || mergeProgress > 0" class="merge-progress-container">
-          <div class="merge-progress-bar-bg">
-            <div class="merge-progress-bar" :style="{ width: mergeProgress + '%' }">
-              <div class="merge-progress-pulse" v-if="processingMerge"></div>
-            </div>
-          </div>
-          <div class="merge-progress-text">{{ Math.floor(mergeProgress) }}%</div>
-          <!-- 添加处理状态文本 -->
-          <div class="processing-status-text" v-if="processingStatusText">{{ processingStatusText }}</div>
-        </div>
-
-        <div class="dialog-actions">
-          <button
-            @click="mergeSelectedFiles"
-            :disabled="processingMerge || !mergeOutputName.trim()"
-            class="confirm-btn"
-            v-if="!processingMerge"
-          >
-            处理
-          </button>
-          <!-- 添加取消处理按钮 -->
-          <button
-            v-else
-            @click="cancelProcessing"
-            :disabled="!canCancelProcessing"
-            class="cancel-processing-btn"
-          >
-            取消处理
-          </button>
-          <button
-            @click="closeMergeDialog"
-            :disabled="processingMerge && !canCancelProcessing"
-            class="cancel-btn"
-          >
-            关闭
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
+
+<style>
+/* 全局弹窗样式，确保直接附加到body时也能正确显示 */
+.merge-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  overflow: hidden;
+}
+
+.merge-dialog {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  animation: fade-in 0.3s ease;
+  z-index: 10000;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.merge-dialog h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.merge-form {
+  margin: 15px 0;
+}
+
+.merge-form label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.merge-form input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.selected-files-info {
+  margin: 15px 0;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.selected-files-info ul {
+  padding-left: 20px;
+  margin: 5px 0;
+}
+
+.selected-files-info li {
+  border: none;
+  padding: 2px 0;
+  background-color: transparent;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.confirm-btn, .cancel-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s ease;
+}
+
+.confirm-btn {
+  background-color: #2196f3;
+  color: white;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  background-color: #0b7dda;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.confirm-btn:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.cancel-btn {
+  background-color: #f5f5f5;
+  color: #555;
+  border: 1px solid #ddd;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.merge-progress-container {
+  margin: 20px 0;
+  width: 100%;
+}
+
+.merge-progress-bar-bg {
+  height: 12px;
+  background-color: #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.merge-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #2196f3, #4caf50);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.merge-progress-pulse {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 15px;
+  background: rgba(255, 255, 255, 0.3);
+  animation: pulse-animation 1.5s infinite;
+}
+
+.merge-progress-text {
+  text-align: center;
+  margin-top: 5px;
+  font-weight: bold;
+  color: #555;
+}
+
+.processing-status-text {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: #555;
+  text-align: center;
+  animation: fade-in 0.3s ease;
+}
+
+.cancel-processing-btn {
+  background-color: #ff9800;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s ease;
+}
+
+.cancel-processing-btn:hover:not(:disabled) {
+  background-color: #f57c00;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.cancel-processing-btn:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+@keyframes pulse-animation {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-100px);
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+</style>
 
 <style scoped>
 .audio-list-container {
@@ -881,6 +1389,77 @@ h2 {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+/* 后台处理状态样式 */
+.background-processing-status {
+  background-color: #f0f8ff;
+  border: 1px solid #c3e0fd;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 4px rgba(33, 150, 243, 0.1);
+}
+
+.background-processing-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.background-progress-bar-bg {
+  height: 12px;
+  background-color: #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.background-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #2196f3, #4caf50);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.background-progress-pulse {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 15px;
+  background: rgba(255, 255, 255, 0.3);
+  animation: pulse-animation 1.5s infinite;
+}
+
+.background-progress-text {
+  font-weight: bold;
+  color: #555;
+  margin-bottom: 10px;
+}
+
+.cancel-background-btn {
+  background-color: #ff9800;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 15px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  align-self: flex-start;
+}
+
+.cancel-background-btn:hover:not(:disabled) {
+  background-color: #f57c00;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.cancel-background-btn:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
 /* 合并对话框样式 */
 .merge-dialog-overlay {
   position: fixed;
@@ -889,18 +1468,15 @@ h2 {
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
   z-index: 1000;
   overflow: hidden; /* 防止滚动 */
 }
 
 .merge-dialog {
-  position: fixed; /* 使用fixed定位 */
+  position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%); /* 确保居中 */
+  transform: translate(-50%, -50%);
   background-color: white;
   border-radius: 8px;
   padding: 20px;
@@ -908,9 +1484,9 @@ h2 {
   max-width: 500px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   animation: fade-in 0.3s ease;
-  z-index: 1001; /* 确保在最上层 */
-  max-height: 80vh; /* 限制最大高度 */
-  overflow-y: auto; /* 内容过多时可滚动 */
+  z-index: 1001;
+  max-height: 80vh;
+  overflow-y: auto;
 }
 
 .merge-dialog h3 {
@@ -1244,5 +1820,24 @@ h2 {
 .cancel-processing-btn:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
+}
+
+/* 添加取消成功的视觉提示样式 */
+.cancel-success {
+  color: #ff9800 !important;
+  font-weight: bold !important;
+  font-size: 1.1rem !important;
+  margin-top: 15px !important;
+  animation: pulse 1.5s infinite !important;
+}
+
+.canceled .merge-progress-bar {
+  background: linear-gradient(90deg, #ff9800, #ff5722) !important;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 1; }
+  100% { opacity: 0.7; }
 }
 </style>
