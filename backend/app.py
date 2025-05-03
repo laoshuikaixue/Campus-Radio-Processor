@@ -423,18 +423,19 @@ def merge_audio(request: MergeRequest):
         # 如果启用音量标准化
         if getattr(request, 'normalizeVolume', False):
             try:
-                target_dBFS = getattr(request, 'normalizeTargetDb', -3.0)
-                print(f"正在进行音量标准化到 {target_dBFS} dBFS")
+                gain_adjustment = getattr(request, 'normalizeTargetDb', -3.0)
+                print(f"正在应用音量调整: {gain_adjustment} dB")
                 
-                # 计算当前dBFS与目标dBFS的差值
-                change_in_dBFS = target_dBFS - merged_audio.dBFS
+                # 直接应用增益调整值，而不是计算与目标dBFS的差值
+                merged_audio = merged_audio.apply_gain(gain_adjustment)
+                print(f"音量调整完成: {gain_adjustment:.2f} dB")
                 
-                # 应用增益变化
-                merged_audio = merged_audio.apply_gain(change_in_dBFS)
-                print(f"音量标准化完成，增益调整: {change_in_dBFS:.2f} dB")
+                # 记录调整后的dBFS值
+                final_dBFS = merged_audio.dBFS
+                print(f"调整后的音量级别: {final_dBFS:.2f} dBFS")
             except Exception as e:
-                print(f"音量标准化失败: {str(e)}")
-                # 继续使用未标准化的音频，不中断处理流程
+                print(f"音量调整失败: {str(e)}")
+                # 继续使用未调整的音频，不中断处理流程
         
         # 导出合并后的音频文件
         print(f"导出合并文件到: {output_path}")
@@ -450,8 +451,8 @@ def merge_audio(request: MergeRequest):
             'duration': len(merged_audio) / 1000,  # 以秒为单位的时长
             'merged': True,
             'mergedFrom': [f['id'] for f in files_to_merge],
-            'normalizeVolume': getattr(request, 'normalizeVolume', False),  # 是否已应用音量标准化
-            'normalizeTargetDb': getattr(request, 'normalizeTargetDb', -3.0) if getattr(request, 'normalizeVolume', False) else None  # 标准化目标dB值
+            'normalizeVolume': getattr(request, 'normalizeVolume', False),  # 是否已应用音量调整
+            'normalizeTargetDb': getattr(request, 'normalizeTargetDb', -3.0) if getattr(request, 'normalizeVolume', False) else None  # 应用的增益调整值
         }
 
         # 将合并后的音频文件元数据添加到总元数据列表中
