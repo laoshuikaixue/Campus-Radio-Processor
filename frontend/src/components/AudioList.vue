@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, onUnmounted, onBeforeUnmount, watch } from 'vue';
-import axios from 'axios';
+import api from '../api';
 import { audioState } from '../audioState';
 
 const emit = defineEmits(['process-success']); // 用于通知父组件处理成功的事件（例如合并）
@@ -37,7 +37,7 @@ const fetchAudioFiles = async () => {
   error.value = '';
   
   try {
-    const response = await axios.get('http://localhost:8000/api/audio');
+    const response = await api.getAudioFiles();
     audioFiles.value = response.data;
   } catch (err) {
     error.value = '无法加载音频文件列表';
@@ -82,7 +82,7 @@ const deleteFile = async (id) => {
   if (!confirm('确定要删除这个音频文件吗？')) return;
 
   try {
-    await axios.delete(`http://localhost:8000/api/audio/${id}`);
+    await api.deleteAudio(id);
     audioFiles.value = audioFiles.value.filter(file => file.id !== id);
   } catch (err) {
     error.value = '删除文件时出错';
@@ -94,7 +94,7 @@ const deleteAllFiles = async () => {
   if (!confirm('确定要删除所有音频文件吗？此操作不可恢复！')) return;
 
   try {
-    await axios.delete('http://localhost:8000/api/audio/all');
+    await api.deleteAllAudio();
     audioFiles.value = [];
   } catch (err) {
     error.value = '删除所有文件时出错';
@@ -194,12 +194,12 @@ const mergeSelectedFiles = async () => {
     processingStatusText.value = '正在提交处理任务...';
     updateDialogContent(); // 更新状态文本
     
-    const response = await axios.post('http://localhost:8000/api/merge', {
-      audioIds: audioFiles.value.map(file => file.id), // 始终处理所有文件
+    const response = await api.mergeAudioFiles({
+      audioIds: audioFiles.value.map(file => file.id),
       outputName: mergeOutputName.value.trim(),
-      requestId: processingRequestId.value, // 传递请求ID，用于后端识别取消请求
-      normalizeVolume: normalizeVolume.value, // 是否启用音量标准化
-      normalizeTargetDb: normalizeTargetDb.value // 标准化目标dB值
+      requestId: processingRequestId.value,
+      normalizeVolume: normalizeVolume.value,
+      normalizeTargetDb: normalizeTargetDb.value
     });
 
     // 检查任务是否被取消 - 如果response.data中有status字段且为cancelled
@@ -283,7 +283,7 @@ const cancelProcessing = async () => {
     processingStatusText.value = '正在取消处理...';
     updateDialogContent(); // 立即更新弹窗显示取消中状态
     
-    await axios.post('http://localhost:8000/api/cancel-processing', {
+    await api.cancelProcessing({
       requestId: processingRequestId.value
     });
     
@@ -411,7 +411,7 @@ const saveEdit = async (file) => {
   }
 
   try {
-    const response = await axios.put(`http://localhost:8000/api/audio/${file.id}`, {
+    const response = await api.updateAudio(file.id, {
       displayName: newDisplayName.value.trim()
     });
 
@@ -485,7 +485,7 @@ const onDrop = async (targetFile) => {
   audioFiles.value = newOrderList;
 
   try {
-    await axios.post('http://localhost:8000/api/reorder', {
+    await api.reorderAudio({
       newOrder: audioFiles.value.map(file => file.id)
     });
     error.value = '';
@@ -513,7 +513,7 @@ const cancelBackgroundProcessing = async () => {
   if (!backgroundProcessing.value || !canCancelProcessing.value) return;
   
   try {
-    await axios.post('http://localhost:8000/api/cancel-processing', {
+    await api.cancelProcessing({
       requestId: backgroundProcessingId.value
     });
     

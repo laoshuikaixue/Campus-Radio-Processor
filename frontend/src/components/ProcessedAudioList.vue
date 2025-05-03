@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, onUnmounted } from 'vue';
-import axios from 'axios';
+import api from '../api';
 import { audioState } from '../audioState';
 
 const processedFiles = ref([]);
@@ -15,7 +15,7 @@ const fetchProcessedFiles = async () => {
   error.value = '';
   
   try {
-    const response = await axios.get('http://localhost:8000/api/processed');
+    const response = await api.getProcessedFiles();
     processedFiles.value = response.data;
   } catch (err) {
     error.value = '无法加载已处理音频文件列表';
@@ -39,7 +39,7 @@ const deleteFile = async (id) => {
   if (!confirm('确定要删除这个已处理的音频文件吗？')) return;
 
   try {
-    await axios.delete(`http://localhost:8000/api/processed/${id}`);
+    await api.deleteProcessedAudio(id);
     processedFiles.value = processedFiles.value.filter(file => file.id !== id);
   } catch (err) {
     error.value = '删除文件时出错';
@@ -51,7 +51,7 @@ const deleteAllProcessedFiles = async () => {
   if (!confirm('确定要删除所有已处理的音频文件吗？此操作不可恢复！')) return;
 
   try {
-    await axios.delete('http://localhost:8000/api/processed/all');
+    await api.deleteAllProcessedAudio();
     processedFiles.value = [];
   } catch (err) {
     error.value = '删除所有已处理文件时出错';
@@ -74,7 +74,7 @@ const saveEdit = async (file) => {
   }
 
   try {
-    const response = await axios.put(`http://localhost:8000/api/processed/${file.id}`, {
+    const response = await api.updateProcessedAudio(file.id, {
       displayName: newDisplayName.value.trim()
     });
 
@@ -98,7 +98,7 @@ const cancelEdit = () => {
 
 // 下载音频文件
 const downloadFile = (id, displayName) => {
-  window.open(`http://localhost:8000/api/download/${id}`, '_blank');
+  window.open(api.getDownloadUrl(id), '_blank');
 };
 
 // 格式化时长（移至组件内定义）

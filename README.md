@@ -14,6 +14,7 @@
 - **处理状态跟踪**：音频处理过程中显示进度条，支持取消处理操作
 - **音频文件重命名**：便捷修改音频文件显示名称
 - **音频音量标准化**：统一音频音量，避免不同音频音量差异太大
+- **前后端分离部署**：支持将前端部署到Vercel等静态托管平台，后端独立部署
 
 ## 项目结构
 
@@ -24,13 +25,17 @@ Campus-Radio-Processor/
 │   │   ├── components/      # Vue 组件
 │   │   │   ├── AudioList.vue            # 待处理音频列表组件
 │   │   │   ├── ProcessedAudioList.vue   # 已处理音频列表组件
-│   │   │   └── AudioUploader.vue        # 音频上传组件
+│   │   │   ├── AudioUploader.vue        # 音频上传组件
+│   │   │   └── ServerConfig.vue         # 服务器配置组件
+│   │   ├── api.js           # API服务封装
+│   │   ├── config.js        # 配置文件
 │   │   ├── audioState.js    # 全局音频播放状态管理
 │   │   ├── assets/          # 静态资源
 │   │   ├── style.css        # 全局样式
 │   │   ├── main.js          # 入口文件
 │   │   └── App.vue          # 主应用组件
 │   ├── public/              # 公共资源
+│   ├── vercel.json          # Vercel部署配置
 │   └── package.json         # 前端依赖配置
 └── backend/                 # FastAPI 后端
     ├── app.py               # 主应用文件
@@ -41,7 +46,7 @@ Campus-Radio-Processor/
     └── audio_metadata.json  # 音频元数据存储文件
 ```
 
-## 安装与运行
+## 本地安装与运行
 
 ### 后端设置
 
@@ -96,7 +101,90 @@ npm run dev
 
 前端应用将在 http://localhost:5173 上运行。
 
+## 分离部署指南
+
+### 前端部署到Vercel
+
+1. Fork或Clone此仓库到你的GitHub账号
+2. 登录Vercel并导入项目，选择frontend目录作为根目录
+3. 在环境变量设置中添加`VITE_API_BASE_URL`并设置为你的后端API地址
+4. 点击部署按钮，等待部署完成
+
+或者直接点击以下按钮（需调整你的仓库URL）:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fusername%2Fcampus-radio-processor&project-name=campus-radio-frontend&root-directory=frontend&env=VITE_API_BASE_URL)
+
+### 后端部署选项
+
+后端需要一个支持Python和文件存储的环境，可选择以下部署方案：
+
+#### 1. 传统VPS/云服务器
+
+适合长期运行的生产环境:
+
+```bash
+# 在服务器上
+git clone https://github.com/username/campus-radio-processor.git
+cd campus-radio-processor/backend
+pip install -r requirements.txt
+# 安装FFmpeg
+apt-get update && apt-get install -y ffmpeg  # Debian/Ubuntu
+# 使用gunicorn或uvicorn作为生产服务器
+pip install gunicorn uvicorn
+gunicorn -w 4 -k uvicorn.workers.UvicornWorker app:app
+```
+
+#### 2. Docker部署
+
+创建一个包含FFmpeg的Docker镜像:
+
+```bash
+# 在backend目录创建Dockerfile
+cd backend
+echo 'FROM python:3.9
+RUN apt-get update && apt-get install -y ffmpeg
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]' > Dockerfile
+
+# 构建并运行
+docker build -t campus-radio-backend .
+docker run -p 8000:8000 -v $(pwd)/uploads:/app/uploads -v $(pwd)/processed:/app/processed campus-radio-backend
+```
+
+#### 3. 平台即服务 (PaaS)
+
+在Railway、Render或Fly.io等平台上部署（确保支持FFmpeg安装）:
+
+```bash
+# 在backend目录创建适用于Railway的railway.toml
+cd backend
+echo '[build]
+builder = "nixpacks"
+buildCommand = "pip install -r requirements.txt"
+
+[deploy]
+startCommand = "uvicorn app:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/"
+
+[nixpacks]
+pkgs = ["ffmpeg"]' > railway.toml
+```
+
+## 注意事项
+
+- 无论选择哪种部署方案，后端都需要配置CORS以允许前端域名的请求
+- 对于生产环境，请考虑添加身份验证和HTTPS支持
+- 确保部署环境中已正确安装FFmpeg，这对音频处理功能至关重要
+- 在分离部署模式下，你需要在前端应用中配置正确的后端API地址
+
 ## 使用说明
+
+### 自定义API服务器
+
+前端应用启动后，点击页面顶部的"服务器设置"按钮，可以设置自定义的后端API地址。
 
 ### 音频文件上传
 
@@ -151,11 +239,5 @@ npm run dev
 - **前端**：
   - Node.js 14+
   - 现代浏览器 (Chrome, Firefox, Edge等)
-
-## 注意事项
-
-- 确保系统中已正确安装FFmpeg，这对音频处理功能至关重要
-- 默认支持的音频格式：MP3, WAV, OGG, FLAC等主流格式
-- 处理大文件可能需要较长时间，请耐心等待
 
 Powered By LaoShui @ 2025

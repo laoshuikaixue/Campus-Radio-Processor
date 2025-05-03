@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import AudioUploader from './components/AudioUploader.vue'; // 导入音频上传组件
 import AudioList from './components/AudioList.vue'; // 导入待处理音频列表组件
 import ProcessedAudioList from './components/ProcessedAudioList.vue'; // 导入已处理音频列表组件
+import ServerConfig from './components/ServerConfig.vue'; // 导入服务器配置组件
 
 const audioListRef = ref(null); // 创建对待处理列表组件实例的引用
 const processedAudioListRef = ref(null); // 创建对已处理列表组件实例的引用
@@ -39,7 +40,10 @@ const handleProcessSuccess = (processedItem) => {
 <template>
   <div class="app-container">
     <header class="app-header">
-      <h1>校园广播站音频处理系统</h1>
+      <div class="header-content">
+        <h1>校园广播站音频处理系统</h1>
+        <ServerConfig />
+      </div>
     </header>
 
     <main class="app-content">
@@ -129,11 +133,18 @@ p {
 }
 
 .app-header {
-  text-align: center;
   margin-bottom: calc(var(--spacing-unit) * 2); /* 头部下方更多空间 */
   padding-bottom: var(--spacing-unit);
   border-bottom: 1px solid var(--border-color); /* 分隔线 */
   animation: slide-down 0.5s ease-out;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 .app-header h1 {
@@ -177,6 +188,8 @@ p {
     padding-bottom: var(--spacing-unit) * 0.5;
     border-bottom: 1px solid var(--dark-bg); /* 部分标题下方的分隔线 */
     color: var(--secondary-text-color); /* 部分标题使用柔和的颜色 */
+    font-weight: 600; /* 增加标题字重 */
+    letter-spacing: 0.5px; /* 增加字间距提高可读性 */
 }
 
 
@@ -241,6 +254,12 @@ p {
 
   .app-header h1 {
     font-size: 2rem; /* 调整头部字体大小 */
+    text-align: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  .header-content {
+    justify-content: center;
   }
 
   .content-section {

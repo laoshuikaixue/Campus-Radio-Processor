@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import axios from 'axios';
+import api from '../api';
 
 const props = defineProps({
   onUploadSuccess: Function // 上传成功后的回调函数
@@ -99,16 +99,11 @@ const uploadFiles = async () => {
       formData.append('files', file);
     });
 
-    // 使用axios上传文件，设置进度监听
-    const response = await axios.post('http://localhost:8000/api/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      },
-      onUploadProgress: (progressEvent) => {
-        if (progressEvent.total) {
-          // 计算上传进度百分比 (0-100)
-          uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        }
+    // 使用API服务上传文件，设置进度监听
+    const response = await api.uploadFiles(formData, (progressEvent) => {
+      if (progressEvent.total) {
+        // 计算上传进度百分比 (0-100)
+        uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total);
       }
     });
 

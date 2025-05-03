@@ -12,10 +12,19 @@ from pydub import AudioSegment
 
 app = FastAPI()
 
-# 配置CORS
+# 配置CORS - 默认允许所有源，但可以通过环境变量限制
+import os
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
+
+# 获取允许的源，默认为所有
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
