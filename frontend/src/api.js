@@ -106,6 +106,45 @@ const api = {
   // 获取下载地址
   getDownloadUrl(audioId) {
     return `${getBaseURL()}/api/download/${audioId}`;
+  },
+  
+  // 轮询检查处理状态 - 当WebSocket连接不可靠时使用
+  pollProcessingStatus(requestId, callback, interval = 3000, maxAttempts = 100) {
+    let attempts = 0;
+    
+    const checkStatus = async () => {
+      try {
+        if (attempts >= maxAttempts) {
+          console.log('达到最大轮询次数，停止轮询');
+          return;
+        }
+        
+        attempts++;
+        
+        const response = await this.checkProcessingStatus({ requestId });
+        const status = response.data.status;
+        
+        // 调用回调函数，传递状态信息
+        if (callback && typeof callback === 'function') {
+          callback(response.data);
+        }
+        
+        // 如果处理已完成或失败或取消，停止轮询
+        if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+          console.log(`处理状态: ${status}，停止轮询`);
+          return;
+        }
+        
+        // 否则继续轮询
+        setTimeout(checkStatus, interval);
+      } catch (error) {
+        console.error('轮询处理状态时出错:', error);
+        setTimeout(checkStatus, interval * 2); // 出错时增加轮询间隔
+      }
+    };
+    
+    // 开始轮询
+    checkStatus();
   }
 };
 

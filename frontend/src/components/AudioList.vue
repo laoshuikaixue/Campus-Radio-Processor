@@ -32,6 +32,162 @@ const backgroundProcessStatusText = ref('');
 const backgroundProcessOutputName = ref('');
 const backgroundProcessingId = ref(null); // 专门用于后台处理的请求ID
 
+// WebSocket连接
+const ws = ref(null);
+const wsConnected = ref(false);
+
+// 初始化WebSocket连接
+const initWebSocket = () => {
+  // 从API URL推断WebSocket URL
+  const wsUrl = `ws://${window.location.hostname}:8000/ws`;
+  ws.value = new WebSocket(wsUrl);
+  
+  // 连接建立
+  ws.value.onopen = () => {
+    console.log('WebSocket连接已建立');
+    wsConnected.value = true;
+  };
+  
+  // 连接关闭
+  ws.value.onclose = () => {
+    console.log('WebSocket连接已关闭');
+    wsConnected.value = false;
+    // 尝试在5秒后重新连接
+    setTimeout(initWebSocket, 5000);
+  };
+  
+  // 连接错误
+  ws.value.onerror = (error) => {
+    console.error('WebSocket错误:', error);
+    wsConnected.value = false;
+  };
+  
+  // 接收消息
+  ws.value.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      handleWebSocketMessage(message);
+    } catch (error) {
+      console.error('解析WebSocket消息出错:', error);
+    }
+  };
+};
+
+// 处理WebSocket消息
+const handleWebSocketMessage = (message) => {
+  // 只处理和当前任务相关的消息
+  if (message.requestId !== processingRequestId.value) return;
+  
+  console.log('收到WebSocket消息:', message.type);
+  
+  switch (message.type) {
+    case 'merge_progress':
+      // 更新进度和状态
+      if (message.progress) {
+        mergeProgress.value = message.progress;
+      }
+      
+      // 更新处理阶段文本
+      if (message.stage) {
+        switch (message.stage) {
+          case 'processing_file':
+            processingStatusText.value = `正在处理文件 ${message.currentFile}/${message.totalFiles}: ${message.fileName}`;
+            break;
+          case 'file_processed':
+            processingStatusText.value = `已完成 ${message.currentFile}/${message.totalFiles} 个文件`;
+            break;
+          case 'volume_normalizing':
+            processingStatusText.value = '正在进行音量标准化...';
+            break;
+          case 'volume_normalized':
+            processingStatusText.value = `音量标准化完成，调整值：${message.gainApplied} dB`;
+            break;
+          case 'exporting':
+            processingStatusText.value = '正在导出最终文件...';
+            break;
+        }
+      }
+      
+      // 更新弹窗
+      updateDialogContent();
+      
+      // 也更新后台处理状态，如果在后台处理
+      if (backgroundProcessing.value) {
+        backgroundProcessProgress.value = mergeProgress.value;
+        backgroundProcessStatusText.value = processingStatusText.value;
+      }
+      break;
+      
+    case 'merge_completed':
+      // 处理完成
+      mergeProgress.value = 100;
+      stopProgressSimulation();
+      processingStatusText.value = '处理任务已完成';
+      canCancelProcessing.value = false;
+      
+      // 更新弹窗内容
+      updateDialogContent();
+      
+      // 如果在弹窗中显示
+      if (mergeDialogOpen.value) {
+        // 显示处理成功提示
+        if (message.fileInfo && message.fileInfo.displayName) {
+          processingStatusText.value = `文件 "${message.fileInfo.displayName}" 处理成功！`;
+          updateDialogContent();
+        }
+        
+        // 处理完成后不自动关闭弹窗，而是让用户手动关闭
+        processingMerge.value = false;
+        updateDialogContent();
+        
+        // 刷新文件列表
+        fetchAudioFiles();
+      } 
+      // 如果在后台处理
+      else if (backgroundProcessing.value) {
+        onBackgroundProcessComplete(message.fileInfo);
+      }
+      
+      // 通知父组件
+      if (message.fileInfo) {
+        emit('process-success', message.fileInfo);
+      }
+      break;
+      
+    case 'merge_failed':
+      // 处理失败
+      stopProgressSimulation();
+      mergeProgress.value = 0;
+      processingStatusText.value = '处理失败';
+      error.value = message.error || '处理音频文件时出错';
+      processingMerge.value = false;
+      updateDialogContent();
+      
+      // 如果在后台处理
+      if (!mergeDialogOpen.value && backgroundProcessing.value) {
+        backgroundProcessing.value = false;
+        backgroundProcessProgress.value = 0;
+        backgroundProcessStatusText.value = '处理失败';
+        setTimeout(() => { backgroundProcessStatusText.value = ''; }, 3000);
+      }
+      break;
+      
+    case 'merge_cancelled':
+      // 处理被取消
+      stopProgressSimulation();
+      mergeProgress.value = 0;
+      processingStatusText.value = '处理已取消';
+      processingMerge.value = false;
+      updateDialogContent();
+      break;
+      
+    case 'merge_warning':
+      // 处理警告
+      console.warn('处理警告:', message.message);
+      break;
+  }
+};
+
 // 获取所有未合并的音频文件
 const fetchAudioFiles = async () => {
   loading.value = true;
@@ -50,6 +206,7 @@ const fetchAudioFiles = async () => {
 // 初始加载时获取文件列表
 onMounted(() => {
   fetchAudioFiles();
+  initWebSocket(); // 初始化WebSocket连接
 });
 
 // 处理上传结果并刷新列表的方法，由父组件 App.vue 调用
@@ -207,6 +364,49 @@ const mergeSelectedFiles = async () => {
       normalizeTargetDb: normalizeTargetDb.value
     });
 
+    // 如果响应中包含请求ID，保存它
+    if (response.data && response.data.id) {
+      processingRequestId.value = response.data.id;
+    }
+    
+    // 启动轮询作为备份通道，以防WebSocket失败
+    api.pollProcessingStatus(processingRequestId.value, (statusData) => {
+      // 如果处理被取消
+      if (statusData.status === 'cancelled') {
+        isCancelled = true;
+        processingStatusText.value = '处理已取消';
+        updateDialogContent();
+        stopProgressSimulation();
+        mergeProgress.value = 0;
+      } 
+      // 如果处理成功完成
+      else if (statusData.status === 'completed' && statusData.fileInfo) {
+        if (mergeProgress.value < 100) {
+          stopProgressSimulation();
+          mergeProgress.value = 100;
+          processingStatusText.value = '处理任务已完成';
+          updateDialogContent();
+          
+          // 刷新文件列表
+          fetchAudioFiles();
+          
+          // 模拟completed事件响应
+          if (statusData.fileInfo && statusData.fileInfo.displayName) {
+            processingStatusText.value = `文件 "${statusData.fileInfo.displayName}" 处理成功！`;
+            updateDialogContent();
+          }
+        }
+      }
+      // 如果处理失败
+      else if (statusData.status === 'failed') {
+        stopProgressSimulation();
+        mergeProgress.value = 0;
+        processingStatusText.value = '处理失败';
+        error.value = statusData.error || '处理音频文件时出错';
+        updateDialogContent();
+      }
+    }, 2000);  // 每2秒轮询一次
+
     // 检查任务是否被取消 - 如果response.data中有status字段且为cancelled
     if (response.data && response.data.status === 'cancelled') {
       isCancelled = true;
@@ -228,31 +428,11 @@ const mergeSelectedFiles = async () => {
 
     // 只有在任务未被取消的情况下继续执行
     if (!isCancelled) {
-      processingStatusText.value = '处理任务已完成';
-      // 合并成功后，将进度直接设为100%
-      mergeProgress.value = 100;
-      stopProgressSimulation();
-      canCancelProcessing.value = false; // 处理完成后不可取消
+      // 注意：这里不再立即结束处理，而是由WebSocket更新或轮询机制更新状态
       
-      // 更新弹窗内容
-      updateDialogContent();
-
-      emit('process-success', response.data); // 通知已处理文件列表的父组件
-
-      // 如果在弹窗中显示，等待关闭弹窗
-      if (mergeDialogOpen.value) {
-        // 不再自动关闭弹窗，而是等待用户点击"在后台继续处理"
-        fetchAudioFiles(); // 刷新待处理列表
-
-        // 显示处理成功提示
-        if (response.data && response.data.displayName) {
-          processingStatusText.value = `文件 "${response.data.displayName}" 处理成功！`;
-          // 更新弹窗状态文本
-          updateDialogContent();
-        }
-      } else if (backgroundProcessing.value) {
-        // 如果是后台处理，调用完成回调
-        onBackgroundProcessComplete(response.data);
+      // 通知已处理文件列表的父组件
+      if (response.data && response.data.fileInfo) {
+        emit('process-success', response.data.fileInfo);
       }
     }
   } catch (err) {
@@ -273,10 +453,6 @@ const mergeSelectedFiles = async () => {
       backgroundProcessStatusText.value = '处理失败';
       setTimeout(() => { backgroundProcessStatusText.value = ''; }, 3000);
     }
-  } finally {
-    processingMerge.value = false;
-    // 不在这里关闭弹窗，而是更新弹窗状态
-    updateDialogContent();
   }
 };
 
@@ -452,6 +628,10 @@ const stopProgressSimulation = () => {
 onUnmounted(() => {
   stopProgressSimulation();
   // 音频播放器的清理由CustomAudioPlayer组件自行处理
+  // 关闭WebSocket连接
+  if (ws.value && wsConnected.value) {
+    ws.value.close();
+  }
 });
 
 // 开始编辑文件名
