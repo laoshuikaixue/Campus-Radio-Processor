@@ -631,6 +631,7 @@ async def merge_audio(request: MergeRequest):
         # 更新处理状态
         if request_id in processing_tasks:
             processing_tasks[request_id]['status'] = 'completed'
+            processing_tasks[request_id]['fileInfo'] = merged_file_info
 
         # 通过WebSocket广播处理完成
         await manager.broadcast({
@@ -688,6 +689,34 @@ async def cancel_processing(request: dict):
     })
 
     return {"success": True, "message": "处理任务已标记为取消"}
+
+
+# POST /api/check-processing-status: 检查处理任务状态
+@app.post("/api/check-processing-status")
+async def check_processing_status(request: dict):
+    request_id = request.get('requestId')
+    if not request_id:
+        raise HTTPException(status_code=400, detail="未提供处理任务ID")
+
+    if request_id not in processing_tasks:
+        raise HTTPException(status_code=404, detail="找不到指定的处理任务")
+    
+    # 获取当前任务状态
+    task_status = processing_tasks[request_id].get('status', 'processing')
+    
+    # 构建响应数据
+    response_data = {
+        "requestId": request_id,
+        "status": task_status
+    }
+    
+    # 如果任务已完成且有关联的文件信息，添加到响应中
+    if task_status == 'completed' and 'fileInfo' in processing_tasks[request_id]:
+        response_data['fileInfo'] = processing_tasks[request_id]['fileInfo']
+    
+    logger.info(f"检查处理状态: 请求ID={request_id}, 状态={task_status}")
+    
+    return response_data
 
 
 # GET /api/download/{audio_id}: 下载指定的音频文件

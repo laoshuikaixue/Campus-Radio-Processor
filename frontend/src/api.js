@@ -91,6 +91,12 @@ const api = {
     return client.post('/api/cancel-processing', data);
   },
 
+  // 检查处理状态
+  checkProcessingStatus(data) {
+    const client = createApiClient();
+    return client.post('/api/check-processing-status', data);
+  },
+
   // 重新排序音频文件
   reorderAudio(data) {
     const client = createApiClient();

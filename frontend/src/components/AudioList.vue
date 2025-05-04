@@ -346,6 +346,9 @@ const startProgressSimulation = () => {
     clearInterval(mergeProgressInterval.value);
   }
   
+  // 用于跟踪进度条在高进度停留的时间
+  let timeStuckAt90Plus = 0;
+  
   // 设置一个模拟的进度更新
   // 进度会先快后慢，模拟实际处理过程
   mergeProgressInterval.value = setInterval(() => {
@@ -375,6 +378,18 @@ const startProgressSimulation = () => {
         if (backgroundProcessing.value) {
           backgroundProcessStatusText.value = '正在合成最终音频...';
         }
+      } else if (mergeProgress.value >= 90) {
+        processingStatusText.value = '处理即将完成...';
+        if (backgroundProcessing.value) {
+          backgroundProcessStatusText.value = '处理即将完成...';
+        }
+        
+        // 如果进度在90%以上停留太久，主动检查处理状态
+        timeStuckAt90Plus += 300;
+        if (timeStuckAt90Plus > 5000) { // 如果超过5秒
+          timeStuckAt90Plus = 0; // 重置计时器
+          checkProcessingStatus(); // 主动检查处理状态
+        }
       }
       
       // 更新弹窗进度，但不重新创建弹窗
@@ -383,6 +398,46 @@ const startProgressSimulation = () => {
       }
     }
   }, 300);
+};
+
+// 主动检查处理状态的函数
+const checkProcessingStatus = async () => {
+  if (!processingRequestId.value) return;
+  
+  try {
+    console.log('主动检查处理状态，requestId:', processingRequestId.value);
+    
+    // 调用API查询处理状态
+    const response = await api.checkProcessingStatus({
+      requestId: processingRequestId.value
+    });
+    
+    // 如果处理已完成但前端未获取到
+    if (response.data && response.data.status === 'completed') {
+      console.log('检测到处理已完成，更新前端状态');
+      
+      // 设置100%进度
+      mergeProgress.value = 100;
+      processingStatusText.value = '处理任务已完成';
+      stopProgressSimulation();
+      canCancelProcessing.value = false;
+      
+      // 更新弹窗内容
+      updateDialogContent();
+      
+      // 刷新文件列表
+      fetchAudioFiles();
+      
+      // 如果response.data中有fileInfo，显示处理成功提示
+      if (response.data.fileInfo && response.data.fileInfo.displayName) {
+        processingStatusText.value = `文件 "${response.data.fileInfo.displayName}" 处理成功！`;
+        updateDialogContent();
+      }
+    }
+  } catch (err) {
+    console.error('检查处理状态出错:', err);
+    // 错误处理比较轻量，不打断用户体验
+  }
 };
 
 // 停止进度条模拟更新
