@@ -627,6 +627,12 @@ const addDialogToBody = () => {
       </ul>
     </div>
     
+    <div class="estimation-info">
+      <p>预估合成音频时长：${
+        formatDuration(audioFiles.value.reduce((total, file) => total + (file.duration || 0), 0))
+      }</p>
+    </div>
+    
     <div id="progress-container" class="merge-progress-container" ${(processingMerge.value || mergeProgress.value > 0) ? '' : 'style="display:none;"'}>
       <div class="merge-progress-bar-bg">
         <div id="progress-bar" class="merge-progress-bar" style="width: ${mergeProgress.value}%">
@@ -1059,6 +1065,20 @@ const removeDialogFromBody = () => {
   border: none;
   padding: 2px 0;
   background-color: transparent;
+}
+
+.estimation-info {
+  margin: 15px 0;
+  padding: 10px;
+  background-color: #f0f7ff;
+  border-radius: 6px;
+  border-left: 4px solid #2196f3;
+}
+
+.estimation-info p {
+  margin: 0;
+  color: #333;
+  font-weight: 500;
 }
 
 .dialog-actions {
