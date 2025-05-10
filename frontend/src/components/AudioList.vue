@@ -123,7 +123,8 @@ const handleWebSocketMessage = (message) => {
       mergeProgress.value = 100;
       stopProgressSimulation();
       processingStatusText.value = '处理任务已完成';
-      canCancelProcessing.value = false;
+      canCancelProcessing.value = true; // 确保可以再次点击处理按钮
+      processingMerge.value = false; // 无论是否在弹窗中，都重置处理状态
       
       // 更新弹窗内容
       updateDialogContent();
@@ -137,9 +138,6 @@ const handleWebSocketMessage = (message) => {
         }
         
         // 处理完成后不自动关闭弹窗，而是让用户手动关闭
-        processingMerge.value = false;
-        updateDialogContent();
-        
         // 刷新文件列表
         fetchAudioFiles();
       } 
@@ -312,6 +310,8 @@ const onBackgroundProcessComplete = (result) => {
   backgroundProcessStatusText.value = '';
   backgroundProcessOutputName.value = '';
   backgroundProcessingId.value = null; // 清除后台处理ID
+  canCancelProcessing.value = true; // 重置可取消状态，确保处理按钮可以再次点击
+  processingMerge.value = false; // 确保处理状态被重置，解除"处理全部"按钮的禁用状态
 
   // 显示处理完成提示
   if (result && result.displayName) {
@@ -773,7 +773,8 @@ const cancelBackgroundProcessing = async () => {
     backgroundProcessOutputName.value = '';
     backgroundProcessStatusText.value = '';
     backgroundProcessingId.value = null;
-    canCancelProcessing.value = false;
+    canCancelProcessing.value = true; // 重置为true以便下次可以点击处理按钮
+    processingMerge.value = false; // 确保主处理状态也被重置，解除处理按钮禁用
     
     // 刷新文件列表，以防有些状态变化
     fetchAudioFiles();
