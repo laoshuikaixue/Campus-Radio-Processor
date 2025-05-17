@@ -20,7 +20,10 @@ const fetchProcessedFiles = async () => {
   } catch (err) {
     error.value = '无法加载已处理音频文件列表';
   } finally {
-    loading.value = false;
+    // 添加一个短暂的延迟，避免刷新过快导致闪烁
+    setTimeout(() => {
+      loading.value = false;
+    }, 500); // 延迟500毫秒
   }
 };
 
@@ -147,6 +150,9 @@ defineExpose({
             删除所有已处理文件
           </button>
         </div>
+        <button @click="fetchProcessedFiles" class="refresh-button">
+          <i class="refresh-icon"></i> 刷新列表
+        </button>
       </div>
 
       <div class="audio-list">
@@ -550,6 +556,29 @@ h2 {
 
 .volume-icon::before {
   content: "🔊";
+  margin-right: 5px;
+}
+
+/* 刷新按钮样式 (与AudioList.vue中保持一致) */
+.refresh-button {
+  background-color: #6c757d; /* 灰色背景 */
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s;
+  display: flex;
+  align-items: center;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background-color: #5a6268;
+}
+
+.refresh-icon::before {
+  content: "🔄"; /* 刷新图标 */
   margin-right: 5px;
 }
 </style>

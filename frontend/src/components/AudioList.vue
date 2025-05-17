@@ -55,7 +55,10 @@ const fetchAudioFiles = async () => {
   } catch (err) {
     error.value = '无法加载音频文件列表';
   } finally {
-    loading.value = false;
+    // 添加一个短暂的延迟，避免刷新过快导致闪烁
+    setTimeout(() => {
+      loading.value = false;
+    }, 500); // 延迟500毫秒
   }
 };
 
@@ -899,6 +902,9 @@ const removeDialogFromBody = () => {
             删除所有待处理文件
           </button>
         </div>
+        <button @click="fetchAudioFiles" class="refresh-button">
+          <i class="refresh-icon"></i> 刷新列表
+        </button>
       </div>
 
       <div class="audio-list">
@@ -1797,119 +1803,26 @@ h2 {
   margin-right: 5px;
 }
 
-/* 改进按钮样式 */
-.merge-button, .delete-all-btn {
-  display: flex;
-  align-items: center;
-  padding: 10px 15px;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  border: none;
-}
-
-.merge-button {
-  background-color: #2196f3;
-  color: white;
-}
-
-.merge-button:hover:not(:disabled) {
-  background-color: #0b7dda;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.delete-all-btn {
-  background-color: #f44336;
-  color: white;
-}
-
-.delete-all-btn:hover:not(:disabled) {
-  background-color: #d32f2f;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.download-btn, .delete-btn {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.3s ease;
-  font-weight: 500;
-}
-
-.download-btn {
-  background-color: #4caf50;
-  color: white;
-}
-
-.download-btn:hover {
-  background-color: #45a049;
-  transform: translateY(-2px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.delete-btn {
-  background-color: #f44336;
-  color: white;
-}
-
-.delete-btn:hover {
-  background-color: #d32f2f;
-  transform: translateY(-2px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.processing-status-text {
-  margin-top: 10px;
-  font-size: 0.9rem;
-  color: #555;
-  text-align: center;
-  animation: fade-in 0.3s ease;
-}
-
-.cancel-processing-btn {
-  background-color: #ff9800;
+/* 刷新按钮样式 */
+.refresh-button {
+  background-color: #6c757d; /* 灰色背景 */
   color: white;
   border: none;
-  border-radius: 6px;
-  padding: 10px 20px;
+  padding: 8px 15px;
+  border-radius: 4px;
   cursor: pointer;
   font-weight: bold;
-  transition: all 0.3s ease;
+  transition: background-color 0.3s;
+  display: flex;
+  align-items: center;
 }
 
-.cancel-processing-btn:hover:not(:disabled) {
-  background-color: #f57c00;
-  transform: translateY(-2px);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+.refresh-button:hover:not(:disabled) {
+  background-color: #5a6268;
 }
 
-.cancel-processing-btn:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-/* 添加取消成功的视觉提示样式 */
-.cancel-success {
-  color: #ff9800 !important;
-  font-weight: bold !important;
-  font-size: 1.1rem !important;
-  margin-top: 15px !important;
-  animation: pulse 1.5s infinite !important;
-}
-
-.canceled .merge-progress-bar {
-  background: linear-gradient(90deg, #ff9800, #ff5722) !important;
-}
-
-@keyframes pulse {
-  0% { opacity: 0.7; }
-  50% { opacity: 1; }
-  100% { opacity: 0.7; }
+.refresh-icon::before {
+  content: "🔄"; /* 刷新图标 */
+  margin-right: 5px;
 }
 </style>
