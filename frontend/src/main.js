@@ -24,6 +24,8 @@ function startPollingMergeStatus() {
         mergeTaskStore.status = res.data.status;
         mergeTaskStore.progress = res.data.progress || (res.data.status === 'completed' ? 100 : 0);
         mergeTaskStore.message = res.data.message || '';
+        mergeTaskStore.currentFileIndex = res.data.currentFileIndex || 0;
+        mergeTaskStore.totalFilesCount = res.data.totalFilesCount || 0;
         mergeTaskStore.show = true;
         if (res.data.status === 'completed' || res.data.status === 'failed' || res.data.status === 'cancelled') {
           stopPollingMergeStatus();

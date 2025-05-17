@@ -21,7 +21,7 @@
 ## 项目结构
 
 ```
-Campus-Radio-Processor-Github/
+Campus-Radio-Processor/
 ├── frontend/                # Vue.js 前端
 │   ├── src/
 │   │   ├── components/      # Vue 组件

@@ -7,6 +7,8 @@ export const mergeTaskStore = reactive({
   progress: 0,     // 进度百分比
   stage: '',       // 当前阶段（如merging/normalizing/exporting等）
   message: '',     // 阶段描述信息
+  currentFileIndex: 0, // 当前处理文件索引 (1-based)
+  totalFilesCount: 0,  // 总文件数
   show: false,     // 是否显示进度浮窗
   reset() {
     this.requestId = null;
@@ -14,6 +16,8 @@ export const mergeTaskStore = reactive({
     this.progress = 0;
     this.stage = '';
     this.message = '';
+    this.currentFileIndex = 0;
+    this.totalFilesCount = 0;
     this.show = false;
   },
 }); 

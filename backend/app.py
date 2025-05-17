@@ -1,15 +1,13 @@
+import concurrent.futures
 import hashlib
 import json
 import os
 import sys
 import uuid
-import threading
-import concurrent.futures
-import asyncio
-from typing import List, Optional, Dict
+from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from loguru import logger
@@ -20,7 +18,8 @@ from pydub import AudioSegment
 logger.remove()  # 移除默认处理器
 logger.add(
     sys.stderr,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+    format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{"
+           "function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
     level="INFO"
 )
 logger.add(
@@ -65,37 +64,6 @@ processing_tasks = {}
 # 创建线程池，用于执行耗时的音频处理任务
 thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)  # 最多同时处理2个音频合成任务
 
-# WebSocket连接管理器
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-        logger.info(f"WebSocket客户端连接，当前活跃连接数: {len(self.active_connections)}")
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-        logger.info(f"WebSocket客户端断开连接，当前活跃连接数: {len(self.active_connections)}")
-
-    async def broadcast(self, message: Dict):
-        disconnected = []
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception as e:
-                logger.error(f"广播消息失败: {e}")
-                disconnected.append(connection)
-
-        # 移除断开的连接
-        for conn in disconnected:
-            if conn in self.active_connections:
-                self.active_connections.remove(conn)
-
-
-manager = ConnectionManager()
-
 
 # 数据模型
 class AudioUpdate(BaseModel):
@@ -113,23 +81,6 @@ class MergeRequest(BaseModel):
 
 class ReorderRequest(BaseModel):
     newOrder: List[str]
-
-
-# --- WebSocket 路由 ---
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        while True:
-            # 等待客户端消息，但不做任何处理
-            # 此连接主要用于服务器向客户端推送处理状态
-            data = await websocket.receive_text()
-            logger.debug(f"从WebSocket接收到消息: {data}")
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-    except Exception as e:
-        logger.error(f"WebSocket连接发生错误: {e}")
-        manager.disconnect(websocket)
 
 
 # --- 元数据加载和保存 ---
@@ -447,7 +398,7 @@ async def merge_audio(request: MergeRequest):
     # 创建唯一的输出文件名
     output_filename = f"{uuid.uuid4()}.mp3"  # 使用 MP3 作为合并后的格式
     output_path = os.path.join(PROCESSED_FOLDER, output_filename)
-    
+
     # 将音频处理任务提交到线程池中异步执行
     thread_pool.submit(
         process_audio_files,
@@ -459,7 +410,7 @@ async def merge_audio(request: MergeRequest):
         getattr(request, 'normalizeVolume', False),
         getattr(request, 'normalizeTargetDb', -3.0)
     )
-    
+
     # 立即返回处理状态，不等待处理完成
     return {
         "id": request_id,
@@ -468,23 +419,17 @@ async def merge_audio(request: MergeRequest):
         "totalFiles": len(files_to_merge)
     }
 
+
 # 后台执行音频处理的函数
-def process_audio_files(files_to_merge, merged_output_name, output_filename, output_path, 
+def process_audio_files(files_to_merge, merged_output_name, output_filename, output_path,
                         request_id, normalize_volume, normalize_target_db):
     logger.info(f"开始后台处理音频文件 (请求ID: {request_id})")
-    
+
     try:
         # 这里执行音频合并操作
         if not files_to_merge:
             logger.error("没有有效的音频文件可合并")
             processing_tasks[request_id]['status'] = 'failed'
-            # 通知前端处理失败
-            asyncio.run(manager.broadcast({
-                "type": "merge_failed",
-                "requestId": request_id,
-                "stage": "failed",
-                "message": "没有有效的音频文件可合并"
-            }))
             return
 
         # 创建合并后的音频段
@@ -498,13 +443,6 @@ def process_audio_files(files_to_merge, merged_output_name, output_filename, out
                 logger.info(f"处理任务 {request_id} 已被取消")
                 if request_id in processing_tasks:
                     processing_tasks[request_id]['status'] = 'cancelled'
-                # 通知前端处理已取消
-                asyncio.run(manager.broadcast({
-                    "type": "merge_cancelled",
-                    "requestId": request_id,
-                    "stage": "cancelled",
-                    "message": "处理任务已被取消"
-                }))
                 return
 
             try:
@@ -513,14 +451,6 @@ def process_audio_files(files_to_merge, merged_output_name, output_filename, out
             except Exception as e:
                 error_msg = f"处理文件 {file_info['displayName']} 时出错: {str(e)}"
                 logger.error(error_msg)
-                # 通知前端处理出错
-                asyncio.run(manager.broadcast({
-                    "type": "merge_failed",
-                    "requestId": request_id,
-                    "stage": "failed",
-                    "message": error_msg,
-                    "fileInfo": file_info
-                }))
                 processing_tasks[request_id]['status'] = 'failed'
                 return
 
@@ -531,29 +461,11 @@ def process_audio_files(files_to_merge, merged_output_name, output_filename, out
                 logger.info(f"处理任务 {request_id} 已被取消")
                 if request_id in processing_tasks:
                     processing_tasks[request_id]['status'] = 'cancelled'
-                # 通知前端处理已取消
-                asyncio.run(manager.broadcast({
-                    "type": "merge_cancelled",
-                    "requestId": request_id,
-                    "stage": "cancelled",
-                    "message": "处理任务已被取消"
-                }))
                 return
 
             try:
                 # 记录开始处理当前文件
                 logger.info(f"处理文件 {idx + 1}/{len(files_to_merge)}: {file_info['displayName']}")
-
-                # 通知前端当前处理进度
-                asyncio.run(manager.broadcast({
-                    "type": "merge_progress",
-                    "requestId": request_id,
-                    "currentFile": idx + 1,
-                    "totalFiles": len(files_to_merge),
-                    "fileName": file_info['displayName'],
-                    "fileId": file_info['id'],
-                    "stage": "processing_file"
-                }))
 
                 # 加载当前音频段
                 audio = AudioSegment.from_file(file_info['path'])
@@ -569,33 +481,18 @@ def process_audio_files(files_to_merge, merged_output_name, output_filename, out
                 progress = (idx + 1) / len(files_to_merge) * 100
                 logger.info(f"合并进度: {progress:.2f}%")
 
-                # 通知前端处理进度
-                asyncio.run(manager.broadcast({
-                    "type": "merge_progress",
-                    "requestId": request_id,
-                    "progress": progress,
-                    "currentFile": idx + 1,
-                    "totalFiles": len(files_to_merge),
-                    "stage": "file_processed"
-                }))
-
                 # 更新进度
                 if request_id in processing_tasks:
                     processing_tasks[request_id]['progress'] = int((idx + 1) / len(files_to_merge) * 60)  # 0-60%
                     processing_tasks[request_id]['stage'] = f"merging {file_info['displayName']}"
                     processing_tasks[request_id]['message'] = f"正在合并: {file_info['displayName']}"
+                    processing_tasks[request_id]['currentFileIndex'] = idx + 1
+                    processing_tasks[request_id]['totalFilesCount'] = len(files_to_merge)
 
             except Exception as e:
                 error_msg = f"合并文件 {file_info['displayName']} 时出错: {str(e)}"
                 logger.error(error_msg)
-                # 通知前端处理出错
-                asyncio.run(manager.broadcast({
-                    "type": "merge_failed",
-                    "requestId": request_id,
-                    "stage": "failed",
-                    "message": error_msg,
-                    "fileInfo": file_info
-                }))
+
                 processing_tasks[request_id]['status'] = 'failed'
                 return
 
@@ -604,22 +501,8 @@ def process_audio_files(files_to_merge, merged_output_name, output_filename, out
             logger.info(f"处理任务 {request_id} 已被取消")
             if request_id in processing_tasks:
                 processing_tasks[request_id]['status'] = 'cancelled'
-            # 通知前端处理已取消
-            asyncio.run(manager.broadcast({
-                "type": "merge_cancelled",
-                "requestId": request_id,
-                "stage": "cancelled",
-                "message": "处理任务已被取消"
-            }))
-            return
 
-        # 通知前端音量调整阶段开始
-        asyncio.run(manager.broadcast({
-            "type": "merge_progress",
-            "requestId": request_id,
-            "stage": "volume_normalizing",
-            "normalizeVolume": normalize_volume
-        }))
+            return
 
         # 如果启用音量标准化
         if normalize_volume:
@@ -635,38 +518,16 @@ def process_audio_files(files_to_merge, merged_output_name, output_filename, out
                 final_dBFS = merged_audio.dBFS
                 logger.info(f"调整后的音量级别: {final_dBFS:.2f} dBFS")
 
-                # 通知前端音量调整完成
-                asyncio.run(manager.broadcast({
-                    "type": "merge_progress",
-                    "requestId": request_id,
-                    "stage": "volume_normalized",
-                    "gainApplied": gain_adjustment,
-                    "finalDbFS": final_dBFS
-                }))
-
                 # 音量标准化阶段
                 if request_id in processing_tasks:
                     processing_tasks[request_id]['progress'] = 70
                     processing_tasks[request_id]['stage'] = "normalizing"
                     processing_tasks[request_id]['message'] = "正在进行音量标准化..."
+                    processing_tasks[request_id]['currentFileIndex'] = len(files_to_merge)
+                    processing_tasks[request_id]['totalFilesCount'] = len(files_to_merge)
             except Exception as e:
                 error_msg = f"音量调整失败: {str(e)}"
                 logger.error(error_msg)
-                # 通知前端音量调整警告
-                asyncio.run(manager.broadcast({
-                    "type": "merge_warning",
-                    "requestId": request_id,
-                    "stage": "volume_normalizing",
-                    "message": error_msg
-                }))
-                # 继续使用未调整的音频，不中断处理流程
-
-        # 通知前端导出阶段开始
-        asyncio.run(manager.broadcast({
-            "type": "merge_progress",
-            "requestId": request_id,
-            "stage": "exporting"
-        }))
 
         # 导出合并后的音频文件
         logger.info(f"导出合并文件到: {output_path}")
@@ -688,7 +549,7 @@ def process_audio_files(files_to_merge, merged_output_name, output_filename, out
 
         # 加载最新的元数据
         metadata = load_metadata()
-        
+
         # 将合并后的音频文件元数据添加到总元数据列表中
         metadata.append(merged_file_info)
 
@@ -700,15 +561,6 @@ def process_audio_files(files_to_merge, merged_output_name, output_filename, out
             processing_tasks[request_id]['status'] = 'completed'
             processing_tasks[request_id]['fileInfo'] = merged_file_info
 
-        # 通知前端处理完成
-        asyncio.run(manager.broadcast({
-            "type": "merge_completed",
-            "requestId": request_id,
-            "stage": "completed",
-            "fileInfo": merged_file_info,
-            "message": "音频处理任务已完成"
-        }))
-        
         logger.info(f"音频处理任务 {request_id} 已完成")
 
         # 完成
@@ -716,6 +568,8 @@ def process_audio_files(files_to_merge, merged_output_name, output_filename, out
             processing_tasks[request_id]['progress'] = 100
             processing_tasks[request_id]['stage'] = "completed"
             processing_tasks[request_id]['message'] = "处理完成"
+            processing_tasks[request_id]['currentFileIndex'] = len(files_to_merge)
+            processing_tasks[request_id]['totalFilesCount'] = len(files_to_merge)
 
     except Exception as e:
         error_msg = f"合并音频文件时出错: {str(e)}"
@@ -733,15 +587,14 @@ def process_audio_files(files_to_merge, merged_output_name, output_filename, out
             processing_tasks[request_id]['progress'] = 0
             processing_tasks[request_id]['stage'] = "failed"
             processing_tasks[request_id]['message'] = str(e)
+            # 失败时也记录总文件数（如果有的话）
+            if 'totalFilesCount' in processing_tasks[request_id]:
+                processing_tasks[request_id]['currentFileIndex'] = processing_tasks[request_id][
+                    'totalFilesCount']  # 将当前文件数设为总数
+            else:
+                processing_tasks[request_id]['currentFileIndex'] = 0
+                processing_tasks[request_id]['totalFilesCount'] = 0
 
-        # 通知前端处理失败
-        asyncio.run(manager.broadcast({
-            "type": "merge_failed",
-            "requestId": request_id,
-            "stage": "failed",
-            "message": error_msg
-        }))
-        
         logger.error(f"音频处理任务 {request_id} 失败: {error_msg}")
 
 
@@ -759,14 +612,6 @@ async def cancel_processing(request: dict):
     processing_tasks[request_id]['cancelled'] = True
     processing_tasks[request_id]['status'] = 'cancelled'
 
-    # 通过WebSocket广播任务已取消（统一type和结构）
-    await manager.broadcast({
-        "type": "merge_cancelled",
-        "requestId": request_id,
-        "stage": "cancelled",
-        "message": "处理任务已被取消"
-    })
-
     return {"success": True, "message": "处理任务已标记为取消"}
 
 
@@ -779,28 +624,34 @@ async def check_processing_status(request: dict):
 
     if request_id not in processing_tasks:
         raise HTTPException(status_code=404, detail="找不到指定的处理任务")
-    
+
     # 获取当前任务状态
     task_status = processing_tasks[request_id].get('status', 'processing')
     progress = processing_tasks[request_id].get('progress', 0)
     stage = processing_tasks[request_id].get('stage', '')
     message = processing_tasks[request_id].get('message', '')
-    
+    current_file_index = processing_tasks[request_id].get('currentFileIndex', 0)
+    total_files_count = processing_tasks[request_id].get('totalFilesCount', 0)
+
     # 构建响应数据
     response_data = {
         "requestId": request_id,
         "status": task_status,
         "progress": progress,
         "stage": stage,
-        "message": message
+        "message": message,
+        "currentFileIndex": current_file_index,
+        "totalFilesCount": total_files_count
     }
-    
+
     # 如果任务已完成且有关联的文件信息，添加到响应中
     if task_status == 'completed' and 'fileInfo' in processing_tasks[request_id]:
         response_data['fileInfo'] = processing_tasks[request_id]['fileInfo']
-    
-    logger.info(f"检查处理状态: 请求ID={request_id}, 状态={task_status}, 进度={progress}, 阶段={stage}")
-    
+
+    logger.info(
+        f"检查处理状态: 请求ID={request_id}, 状态={task_status}, 进度={progress}, 阶段={stage}, "
+        f"文件进度={current_file_index}/{total_files_count}")
+
     return response_data
 
 
