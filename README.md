@@ -7,7 +7,6 @@
 ![image](https://github.com/user-attachments/assets/e4d7d424-d3dc-487e-a02a-e5bc2132eeb6)
 ![image](https://github.com/user-attachments/assets/d96e50f4-07f2-4373-b40d-65c3f4e5a5bf)
 
-
 ## 功能特点
 
 - **音频文件上传与管理**：支持批量上传音频文件，自动去重，避免重复文件占用存储空间
@@ -22,31 +21,43 @@
 ## 项目结构
 
 ```
-Campus-Radio-Processor/
+Campus-Radio-Processor-Github/
 ├── frontend/                # Vue.js 前端
 │   ├── src/
 │   │   ├── components/      # Vue 组件
 │   │   │   ├── AudioList.vue            # 待处理音频列表组件
 │   │   │   ├── ProcessedAudioList.vue   # 已处理音频列表组件
 │   │   │   ├── AudioUploader.vue        # 音频上传组件
-│   │   │   └── ServerConfig.vue         # 服务器配置组件
-│   │   ├── api.js           # API服务封装
-│   │   ├── config.js        # 配置文件
+│   │   │   ├── ServerConfig.vue         # 服务器配置与主题切换
+│   │   │   └── MergeProgressFloat.vue   # 合并进度浮窗组件
+│   │   ├── api.js           # API服务封装，包含进度轮询逻辑
+│   │   ├── config.js        # 配置文件（API地址等）
 │   │   ├── audioState.js    # 全局音频播放状态管理
+│   │   ├── store/
+│   │   │   ├── mergeTask.js             # 合并任务全局状态
+│   │   │   └── taskStatus.js            # （可选）多任务状态管理
 │   │   ├── assets/          # 静态资源
 │   │   ├── style.css        # 全局样式
-│   │   ├── main.js          # 入口文件
+│   │   ├── main.js          # 入口文件，负责进度轮询
 │   │   └── App.vue          # 主应用组件
 │   ├── public/              # 公共资源
 │   └── package.json         # 前端依赖配置
 └── backend/                 # FastAPI 后端
-    ├── app.py               # 主应用文件
+    ├── app.py               # 主应用文件，支持进度状态API
     ├── run.py               # 启动脚本
     ├── requirements.txt     # 依赖项
     ├── uploads/             # 上传的音频文件存储目录
     ├── processed/           # 处理后的音频文件存储目录
     └── audio_metadata.json  # 音频元数据存储文件
 ```
+
+## 进度轮询说明
+- 前端通过 `mergeTaskStore` 记录当前合并任务ID和进度，`main.js` 定时调用 `/api/check-processing-status` 获取进度、阶段、状态等信息，驱动进度浮窗实时刷新。
+- 后端 `app.py` 在每个处理阶段实时写入 `processing_tasks`，并由 `/api/check-processing-status` 提供进度数据。
+
+## 其他说明
+- 已彻底移除WebSocket相关实现，所有进度均为API轮询获取。
+- 组件结构、状态管理、API调用等均已模块化，便于维护和扩展。
 
 ## 本地安装与运行
 

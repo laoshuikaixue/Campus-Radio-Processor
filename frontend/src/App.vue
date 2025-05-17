@@ -1,40 +1,30 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import AudioUploader from './components/AudioUploader.vue'; // 导入音频上传组件
 import AudioList from './components/AudioList.vue'; // 导入待处理音频列表组件
 import ProcessedAudioList from './components/ProcessedAudioList.vue'; // 导入已处理音频列表组件
 import ServerConfig from './components/ServerConfig.vue'; // 导入服务器配置组件
+import MergeProgressFloat from './components/MergeProgressFloat.vue';
+import { mergeTaskStore } from './store/mergeTask';
 
 const audioListRef = ref(null); // 创建对待处理列表组件实例的引用
 const processedAudioListRef = ref(null); // 创建对已处理列表组件实例的引用
 
-// 处理 AudioUploader 上传成功后的回调函数
-// AudioUploader 组件会通过 props 将后端返回的上传结果列表传递给这个方法
-const handleUploadSuccess = (uploadedItems) => {
-  // 调用 AudioList 组件的方法来处理上传结果并刷新列表
-  // 假设 AudioList 组件有一个名为 processUploadedItems 的方法来接收并处理上传成功的项
-  if (audioListRef.value && audioListRef.value.processUploadedItems) {
-    audioListRef.value.processUploadedItems(uploadedItems);
-  } else if (audioListRef.value && audioListRef.value.fetchAudioFiles) {
-    // 如果无法调用特定处理方法，至少尝试刷新待处理列表
-    audioListRef.value.fetchAudioFiles();
-  }
-};
-
-// 处理 AudioList 或 ProcessedAudioList 完成处理（例如合并）后的回调函数
-// ProcessedAudioList 也应该会触发 'process-success' 事件
-const handleProcessSuccess = (processedItem) => {
-  // 处理成功后，通常需要刷新 已处理列表ProcessedAudioList
-  // 假设 ProcessedAudioList 组件有一个名为 fetchProcessedFiles 的方法来刷新列表
-  if (processedAudioListRef.value && processedAudioListRef.value.fetchProcessedFiles) {
+// 合并任务完成后刷新已处理音频列表
+watch(() => mergeTaskStore.status, (val) => {
+  if (val === 'completed' && processedAudioListRef.value && processedAudioListRef.value.fetchProcessedFiles) {
     processedAudioListRef.value.fetchProcessedFiles();
   }
-  
-  // 同时，如果处理（合并）成功，原始文件可能从待处理列表移除，所以也需要刷新 待处理列表AudioList
-  if (audioListRef.value && audioListRef.value.fetchAudioFiles) {
-    audioListRef.value.fetchAudioFiles();
+});
+
+function handleMergeCancel() {
+  // 取消合并任务
+  if (mergeTaskStore.requestId) {
+    import('./api').then(api => {
+      api.default.cancelProcessing({ requestId: mergeTaskStore.requestId });
+    });
   }
-};
+}
 </script>
 
 <template>
@@ -49,12 +39,12 @@ const handleProcessSuccess = (processedItem) => {
     <main class="app-content">
       <section class="content-section upload-section">
           <h2>上传音频文件</h2>
-          <AudioUploader :onUploadSuccess="handleUploadSuccess" />
+          <AudioUploader />
       </section>
 
       <section class="content-section pending-section">
           <h2>待处理音频列表</h2>
-          <AudioList ref="audioListRef" @process-success="handleProcessSuccess" />
+          <AudioList ref="audioListRef" />
       </section>
 
       <section class="content-section processed-section">
@@ -70,6 +60,17 @@ const handleProcessSuccess = (processedItem) => {
         </a>
       </p>
     </footer>
+
+    <!-- 合并进度浮窗 -->
+    <MergeProgressFloat
+      v-if="mergeTaskStore.show"
+      :progress="mergeTaskStore.progress"
+      :status="mergeTaskStore.status"
+      :message="mergeTaskStore.message"
+      :can-cancel="mergeTaskStore.status === 'processing'"
+      :on-cancel="handleMergeCancel"
+      :on-close="() => mergeTaskStore.reset()"
+    />
   </div>
 </template>
 
@@ -317,5 +318,15 @@ button, a, .interactive {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+}
+
+/* 保证全局深浅色适配 */
+body.dark {
+  background: #181a20;
+  color: #f1f1f1;
+}
+body.light {
+  background: #fff;
+  color: #222;
 }
 </style>
