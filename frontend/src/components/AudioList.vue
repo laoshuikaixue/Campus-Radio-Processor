@@ -23,7 +23,7 @@ const canCancelProcessing = ref(true); // 是否可以取消处理
 // 音量标准化选项
 const normalizeVolume = ref(false); // 是否启用音量标准化
 const normalizeTargetDb = ref(-3.0); // 标准化目标dB
-// 新增取消处理API调用ID
+// 取消处理API调用ID
 const processingRequestId = ref(null);
 
 // 创建变量跟踪后台处理状态

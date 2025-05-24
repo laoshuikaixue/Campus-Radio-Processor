@@ -25,6 +25,13 @@ function handleMergeCancel() {
     });
   }
 }
+
+// 处理上传成功事件，调用 AudioList 的刷新方法
+function handleUploadSuccess(uploadedItems) {
+  if (audioListRef.value && audioListRef.value.processUploadedItems) {
+    audioListRef.value.processUploadedItems(uploadedItems);
+  }
+}
 </script>
 
 <template>
@@ -39,7 +46,7 @@ function handleMergeCancel() {
     <main class="app-content">
       <section class="content-section upload-section">
           <h2>上传音频文件</h2>
-          <AudioUploader />
+          <AudioUploader :on-upload-success="handleUploadSuccess" />
       </section>
 
       <section class="content-section pending-section">

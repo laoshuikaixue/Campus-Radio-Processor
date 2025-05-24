@@ -146,7 +146,7 @@ const createDarkModeStyles = () => {
         color: white;
       }
       
-      /* 上传组件深色模式样式优化 */
+      /* 上传组件深色模式样式 */
       :root.dark-mode .uploader-container {
         background-color: #2c3034;
         border-color: #495057;
