@@ -872,6 +872,30 @@ const removeDialogFromBody = () => {
       </div>
     </div>
 
+    <div class="actions-bar">
+      <div class="left-actions">
+        <button
+          @click="openMergeDialog"
+          :disabled="audioFiles.length < 2 || processingMerge || backgroundProcessing"
+          class="process-all-btn"
+        >
+          <i class="merge-icon"></i>
+          {{ processingMerge ? processingStatusText : (backgroundProcessing ? '后台处理中...' : '处理全部') }}
+        </button>
+        <button
+          @click="deleteAllFiles"
+          :disabled="audioFiles.length === 0"
+          class="delete-all-btn"
+        >
+          <i class="delete-icon"></i>
+          删除所有文件
+        </button>
+      </div>
+      <button @click="fetchAudioFiles" class="refresh-button">
+        <i class="refresh-icon"></i> 刷新列表
+      </button>
+    </div>
+
     <div v-if="loading" class="loading-indicator">
       <div class="loading-spinner"></div>
       <p>加载中...</p>
@@ -883,30 +907,6 @@ const removeDialogFromBody = () => {
     </div>
 
     <div v-else>
-      <div class="actions-bar">
-        <div class="left-actions">
-          <button
-            @click="openMergeDialog"
-            :disabled="audioFiles.length < 2 || processingMerge"
-            class="merge-button"
-          >
-            <i class="merge-icon"></i>
-            处理全部 {{ audioFiles.length }} 个文件
-          </button>
-          <button
-            @click="deleteAllFiles"
-            class="delete-all-btn"
-            :disabled="processingMerge"
-          >
-            <i class="delete-icon"></i>
-            删除所有待处理文件
-          </button>
-        </div>
-        <button @click="fetchAudioFiles" class="refresh-button">
-          <i class="refresh-icon"></i> 刷新列表
-        </button>
-      </div>
-
       <div class="audio-list">
         <transition-group name="audio-item-transition">
           <div
@@ -1514,7 +1514,7 @@ h2 {
   flex-wrap: wrap;
 }
 
-.merge-button {
+.process-all-btn {
   background-color: #2196f3;
   color: white;
   border: none;
@@ -1525,11 +1525,11 @@ h2 {
   transition: background-color 0.3s;
 }
 
-.merge-button:hover:not(:disabled) {
+.process-all-btn:hover:not(:disabled) {
   background-color: #0b7dda;
 }
 
-.merge-button:disabled {
+.process-all-btn:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
 }

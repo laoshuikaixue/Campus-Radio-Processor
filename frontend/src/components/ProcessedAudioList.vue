@@ -129,6 +129,21 @@ defineExpose({
   <div class="processed-list-container">
     <h2>已处理音频文件列表</h2>
 
+    <div class="actions-bar">
+      <div class="left-actions">
+        <button
+          @click="deleteAllProcessedFiles"
+          class="delete-all-btn"
+        >
+          <i class="delete-icon"></i>
+          删除所有已处理文件
+        </button>
+      </div>
+      <button @click="fetchProcessedFiles" class="refresh-button">
+        <i class="refresh-icon"></i> 刷新列表
+      </button>
+    </div>
+
     <div v-if="loading" class="loading-indicator">
       <div class="loading-spinner"></div>
       <p>加载中...</p>
@@ -140,21 +155,6 @@ defineExpose({
     </div>
 
     <div v-else>
-      <div class="actions-bar">
-        <div class="left-actions">
-          <button
-            @click="deleteAllProcessedFiles"
-            class="delete-all-btn"
-          >
-            <i class="delete-icon"></i>
-            删除所有已处理文件
-          </button>
-        </div>
-        <button @click="fetchProcessedFiles" class="refresh-button">
-          <i class="refresh-icon"></i> 刷新列表
-        </button>
-      </div>
-
       <div class="audio-list">
         <transition-group name="audio-item-transition">
           <div
